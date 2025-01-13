@@ -1,0 +1,18 @@
+{
+  "extends": "@tsconfig/react-native/tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-native",  // Ensures JSX parsing works correctly in React Native
+    "strict": true,         // Enables all strict type-checking options
+    "esModuleInterop": true, // Allow importing non-ESM modules
+    "skipLibCheck": true     // Skip type-checking of declaration files for faster builds
+  },
+  "include": [
+    "src/**/*",           // Include all files under src/
+    "examples/**/*",      // Include files under examples/
+    "App.tsx",            // Include main entry file if outside src/
+    "tsconfig.json"       // Ensure tsconfig.json itself is included
+  ],
+  "exclude": [
+    "node_modules"        // Exclude node_modules folder
+  ]
+}

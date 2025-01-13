@@ -1,0 +1,6 @@
+module Pods_Mychanic_MychanicTests {
+  umbrella header "Pods-Mychanic-MychanicTests-umbrella.h"
+
+  export *
+  module * { export * }
+}
