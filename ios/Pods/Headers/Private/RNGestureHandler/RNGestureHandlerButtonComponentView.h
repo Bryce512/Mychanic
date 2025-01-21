@@ -1,1 +1,1 @@
-../../../../../node_modules/react-native-gesture-handler/ios/RNGestureHandlerButtonComponentView.h
+../../../../../node_modules/react-native-gesture-handler/apple/RNGestureHandlerButtonComponentView.h

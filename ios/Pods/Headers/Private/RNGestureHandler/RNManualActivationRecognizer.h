@@ -1,1 +1,1 @@
-../../../../../node_modules/react-native-gesture-handler/ios/RNManualActivationRecognizer.h
+../../../../../node_modules/react-native-gesture-handler/apple/RNManualActivationRecognizer.h

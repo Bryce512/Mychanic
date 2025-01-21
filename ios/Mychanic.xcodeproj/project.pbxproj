@@ -40,6 +40,13 @@
 			remoteGlobalIDString = 13B07F861A680F5B00A75B9A;
 			remoteInfo = Mychanic;
 		};
+		02ABA2AA2D3EFEF500F618B0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = AB9E955685A8903E294CBC5F04D3A9F2;
+			remoteInfo = "React-jsc";
+		};
 		3A2B53662A5F4E600062B426 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
@@ -102,13 +109,6 @@
 			proxyType = 2;
 			remoteGlobalIDString = 3CA7A9404CCDD6BA22C97F8348CE3209;
 			remoteInfo = glog;
-		};
-		3A9B9B912A31347200D58AAE /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
-			proxyType = 2;
-			remoteGlobalIDString = FB6FAD8F0183E86ACBFBD8A81BA7BF3A;
-			remoteInfo = libevent;
 		};
 		3A9B9B932A31347200D58AAE /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -179,13 +179,6 @@
 			proxyType = 2;
 			remoteGlobalIDString = 37592FDAD45752511010F4B06AC57355;
 			remoteInfo = "React-cxxreact";
-		};
-		3A9B9BA72A31347200D58AAE /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
-			proxyType = 2;
-			remoteGlobalIDString = DAD8B71DF2DFCF15AAF98C06D37D5703;
-			remoteInfo = "React-hermes";
 		};
 		3A9B9BA92A31347200D58AAE /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -445,7 +438,6 @@
 				3A9B9B7E2A31347200D58AAE /* libDoubleConversion.a */,
 				3A9B9B8E2A31347200D58AAE /* libfmt.a */,
 				3A9B9B902A31347200D58AAE /* libglog.a */,
-				3A9B9B922A31347200D58AAE /* liblibevent.a */,
 				3A9B9B942A31347200D58AAE /* libMultiplatformBleAdapter.a */,
 				3A9B9B962A31347200D58AAE /* libPods-Mychanic.a */,
 				3A9B9B982A31347200D58AAE /* libPods-Mychanic-MychanicTests.a */,
@@ -456,7 +448,7 @@
 				3A9B9BA22A31347200D58AAE /* AccessibilityResources.bundle */,
 				3A9B9BA42A31347200D58AAE /* libReact-CoreModules.a */,
 				3A9B9BA62A31347200D58AAE /* libReact-cxxreact.a */,
-				3A9B9BA82A31347200D58AAE /* libReact-hermes.a */,
+				02ABA2AB2D3EFEF500F618B0 /* libReact-jsc.a */,
 				3A9B9BAA2A31347200D58AAE /* libReact-jsi.a */,
 				3A9B9BAC2A31347200D58AAE /* libReact-jsiexecutor.a */,
 				3A9B9BAE2A31347200D58AAE /* libReact-jsinspector.a */,
@@ -538,7 +530,6 @@
 				00E356EA1AD99517003FC87E /* Sources */,
 				00E356EB1AD99517003FC87E /* Frameworks */,
 				00E356EC1AD99517003FC87E /* Resources */,
-				C886032824CBFB18ADB593A4 /* [CP] Embed Pods Frameworks */,
 				2B4F9C653408B2881B1F4AA4 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
@@ -561,7 +552,6 @@
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
-				B3108741855BA143992ACBCE /* [CP] Embed Pods Frameworks */,
 				010193B8C83C4C66F3DAC60C /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
@@ -620,6 +610,13 @@
 /* End PBXProject section */
 
 /* Begin PBXReferenceProxy section */
+		02ABA2AB2D3EFEF500F618B0 /* libReact-jsc.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = "libReact-jsc.a";
+			remoteRef = 02ABA2AA2D3EFEF500F618B0 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
 		3A2B53672A5F4E600062B426 /* libreact-native-safe-area-context.a */ = {
 			isa = PBXReferenceProxy;
 			fileType = archive.ar;
@@ -681,13 +678,6 @@
 			fileType = archive.ar;
 			path = libglog.a;
 			remoteRef = 3A9B9B8F2A31347200D58AAE /* PBXContainerItemProxy */;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		3A9B9B922A31347200D58AAE /* liblibevent.a */ = {
-			isa = PBXReferenceProxy;
-			fileType = archive.ar;
-			path = liblibevent.a;
-			remoteRef = 3A9B9B912A31347200D58AAE /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 		3A9B9B942A31347200D58AAE /* libMultiplatformBleAdapter.a */ = {
@@ -758,13 +748,6 @@
 			fileType = archive.ar;
 			path = "libReact-cxxreact.a";
 			remoteRef = 3A9B9BA52A31347200D58AAE /* PBXContainerItemProxy */;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		3A9B9BA82A31347200D58AAE /* libReact-hermes.a */ = {
-			isa = PBXReferenceProxy;
-			fileType = archive.ar;
-			path = "libReact-hermes.a";
-			remoteRef = 3A9B9BA72A31347200D58AAE /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 		3A9B9BAA2A31347200D58AAE /* libReact-jsi.a */ = {
@@ -1018,40 +1001,6 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		B3108741855BA143992ACBCE /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Mychanic/Pods-Mychanic-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Mychanic/Pods-Mychanic-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Mychanic/Pods-Mychanic-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		C886032824CBFB18ADB593A4 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Mychanic-MychanicTests/Pods-Mychanic-MychanicTests-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Mychanic-MychanicTests/Pods-Mychanic-MychanicTests-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Mychanic-MychanicTests/Pods-Mychanic-MychanicTests-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 		FD10A7F022414F080027D42C /* Start Packager */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -1242,7 +1191,7 @@
 				COPY_PHASE_STRIP = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = i386;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "";
 				GCC_C_LANGUAGE_STANDARD = gnu99;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -1314,7 +1263,7 @@
 				COPY_PHASE_STRIP = YES;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = i386;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "";
 				GCC_C_LANGUAGE_STANDARD = gnu99;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;

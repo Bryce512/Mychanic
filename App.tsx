@@ -1,148 +1,48 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-import React, {useEffect, useState} from 'react';
-import {View, Button, StyleSheet} from 'react-native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {NavigationContainer} from '@react-navigation/native';
-import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-import {GestureHandlerRootView} from 'react-native-gesture-handler';
+// app.tsx
 
-// Import Screens
+import React from 'react';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { NavigationContainer } from '@react-navigation/native';
+
+// Import screens here
 import SplashScreen from './src/screens/SplashScreen';
 import HomeScreen from './src/screens/HomeScreen';
-import SettingScreen from './src/screens/SettingsScreen';
-import ClickScreen from './src/screens/ClickMenu';
-import DataScreen from './src/screens/LiveData';
-import SoundScreen from './src/screens/SoundsLike';
-import FeelScreen from './src/screens/FeelScreen';
-import NotWorking from './src/screens/NotWorking';
-import DashLib from './src/screens/DashlightLibrary';
-import LooksLike from './src/screens/Looks';
-import Smells from './src/screens/Smells';
+import Settings from './src/screens/settings';
+import ScanDevicesScreen from './src/screens/ScanDevices';
 
-// Import Theme and Bluetooth Manager
-import theme from './src/styles/StylizedComponents';
-import BluetoothManager from './src/services/BluetoothManager';
-
-// Navigation Setup
-const Stack = createNativeStackNavigator();
-const Tab = createBottomTabNavigator();
-
-// Default Screen Options
-const defaultScreenOptions = {
-  headerStyle: theme.headerBackground,
-  headerTitleStyle: theme.headerText,
-  headerTintColor: 'white',
-  headerBackTitleVisible: false,
+// Define RootStackParamList with all screen names
+export type RootStackParamList = {
+  Splash: undefined;
+  Home: undefined;
+  Settings: undefined;
+  ScanDevices: undefined;
 };
 
+// Your screens array can stay as is
+export const screens: { name: keyof RootStackParamList; component: React.ComponentType<any>; options: object }[] = [
+  { name: 'Splash', component: SplashScreen, options: { headerShown: false } },
+  { name: 'Home', component: HomeScreen, options: { title: 'My Garage' } },
+  { name: 'Settings', component: Settings, options: { title: 'Settings' } },
+  { name: 'ScanDevices', component: ScanDevicesScreen, options: { title: 'Scan Devices' } },
+];
+
+// Stack Navigator Setup
+const Stack = createNativeStackNavigator<RootStackParamList>();  // Use the type here
+
 const App = () => {
-  const [isScanning, setIsScanning] = useState<boolean>(true);
-  const [deviceFound, setDeviceFound] = useState<boolean>(false);
-  const [deviceConnected, setDeviceConnected] = useState(false);
-  const btManager = new BluetoothManager();
-
-  useEffect(() => {
-    btManager
-      .startScan()
-      .then(() => {
-        setIsScanning(false);
-        setDeviceFound(true);
-        return btManager.connectToDevice();
-      })
-      .then(() => {
-        console.log('Device connection successful');
-        setDeviceConnected(true);
-      })
-      .catch(error => {
-        setIsScanning(false);
-        console.error('Error during scan or connection:', error);
-      });
-  }, []);
-
-  const disconnect = (): void => {
-    btManager
-      .disconnectFromDevice()
-      .then(() => {
-        setDeviceConnected(false);
-      })
-      .catch(error => {
-        console.error('Device disconnect error:', error);
-      });
-  };
-
   return (
-    <GestureHandlerRootView style={{flex: 1}}>
-      <NavigationContainer>
-        <Stack.Navigator initialRouteName="Splash">
+    <NavigationContainer>
+      <Stack.Navigator initialRouteName="Splash">
+        {screens.map(({ name, component, options }) => (
           <Stack.Screen
-            name="Splash"
-            component={SplashScreen}
-            initialParams={{theme, isScanning, deviceFound, Stack}}
-            options={{headerShown: false}}
+            key={name}
+            name={name}
+            component={component}
+            options={options}
           />
-          <Stack.Screen
-            name="Home"
-            component={HomeScreen}
-            initialParams={{theme, Stack}}
-            options={{title: 'My Garage', headerShown: false}}
-          />
-          <Stack.Screen
-            name="Settings"
-            component={SettingScreen}
-            initialParams={{theme, Stack}}
-            options={{title: 'Settings', ...defaultScreenOptions}}
-          />
-          <Stack.Screen
-            name="ClickMenu"
-            component={ClickScreen}
-            initialParams={{theme, Stack}}
-            options={{title: 'Issue?', ...defaultScreenOptions}}
-          />
-          <Stack.Screen
-            name="DataScreen"
-            component={DataScreen}
-            initialParams={{theme}}
-            options={{title: 'DataScreen', ...defaultScreenOptions}}
-          />
-          <Stack.Screen
-            name="SoundScreen"
-            component={SoundScreen}
-            initialParams={{theme}}
-            options={{title: 'Sounds', ...defaultScreenOptions}}
-          />
-          <Stack.Screen
-            name="FeelScreen"
-            component={FeelScreen}
-            initialParams={{theme}}
-            options={{title: 'Feels Wrong', ...defaultScreenOptions}}
-          />
-          <Stack.Screen
-            name="DashLib"
-            component={DashLib}
-            initialParams={{theme}}
-            options={{title: 'Dashlight Library', ...defaultScreenOptions}}
-          />
-          <Stack.Screen
-            name="NotWorking"
-            component={NotWorking}
-            initialParams={{theme}}
-            options={{title: 'Not Working?', ...defaultScreenOptions}}
-          />
-          <Stack.Screen
-            name="Looks"
-            component={LooksLike}
-            initialParams={{theme}}
-            options={{title: 'Looks Like', ...defaultScreenOptions}}
-          />
-          <Stack.Screen
-            name="Smells"
-            component={Smells}
-            initialParams={{theme}}
-            options={{title: 'Smells Like', ...defaultScreenOptions}}
-          />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </GestureHandlerRootView>
+        ))}
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 };
 

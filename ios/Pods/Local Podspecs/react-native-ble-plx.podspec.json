@@ -16,9 +16,7 @@
   "source_files": "ios/**/*.{h,m}",
   "compiler_flags": "-DMULTIPLATFORM_BLE_ADAPTER",
   "dependencies": {
-    "React-Core": [
-
-    ],
+    "React-Core": [],
     "MultiplatformBleAdapter": [
       "0.1.9"
     ]

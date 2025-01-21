@@ -47,7 +47,7 @@ const theme = StyleSheet.create({
   backButton: {
     backgroundColor: 'white',
     fontSize: 20,
-    fontWeight: '200',
+    fontWeight: 200,
     textAlign: 'center',
   },
   settingsButtonContainer: {

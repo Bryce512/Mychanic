@@ -42,8 +42,6 @@
     "React-jsi": [
       "0.71.11"
     ],
-    "React-RCTBlob": [
-
-    ]
+    "React-RCTBlob": []
   }
 }

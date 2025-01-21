@@ -5,6 +5,8 @@ import {TouchableOpacity} from 'react-native-gesture-handler';
 import {useNavigation} from '@react-navigation/native';
 import Progress_bar from '../components/ProgressBar';
 import theme from '../styles/StylizedComponents';
+import { RootStackParamList } from '../../App';
+
 
 interface Props {
   theme: any;
@@ -19,7 +21,7 @@ const CustomHeader: React.FC<Props> = ({goToScreen}) => (
     <View style={theme.headerBackground} />
     <Text style={theme.headerText}>My Garage</Text>
     <View style={theme.settingsButtonContainer}>
-      <TouchableOpacity onPress={() => goToScreen('settings')}>
+      <TouchableOpacity onPress={() => goToScreen('Settings')}>
         <AllIcons.MatComIcons name="cog" size={30} style={theme.settingsIcon} />
       </TouchableOpacity>
     </View>
@@ -53,7 +55,7 @@ const TabBar: React.FC<Props> = ({goToScreen}) => (
     </View>
 
     <View style={theme.tabButton}>
-      <TouchableOpacity onPress={() => goToScreen('DataScreen')}>
+      <TouchableOpacity onPress={() => goToScreen('ScanDevices')}>
         <AllIcons.Oct_Icons name="graph" size={45} style={theme.settingsIcon} />
 
         <Text style={theme.tabText}>Live Data</Text>

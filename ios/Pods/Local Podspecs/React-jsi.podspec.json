@@ -21,18 +21,16 @@
     "boost": [
       "1.76.0"
     ],
-    "DoubleConversion": [
-
-    ],
+    "DoubleConversion": [],
     "RCT-Folly": [
       "2021.07.22.00"
     ],
-    "glog": [
-
-    ],
-    "hermes-engine": [
-
-    ]
+    "glog": []
   },
-  "source_files": "jsi/JSIDynamic.{cpp,h}"
+  "source_files": "**/*.{cpp,h}",
+  "exclude_files": [
+    "jsi/jsilib-posix.cpp",
+    "jsi/jsilib-windows.cpp",
+    "**/test/*"
+  ]
 }

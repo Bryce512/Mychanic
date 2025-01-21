@@ -23,15 +23,11 @@
     "boost": [
       "1.76.0"
     ],
-    "DoubleConversion": [
-
-    ],
+    "DoubleConversion": [],
     "RCT-Folly": [
       "2021.07.22.00"
     ],
-    "glog": [
-
-    ],
+    "glog": [],
     "React-jsinspector": [
       "0.71.11"
     ],
@@ -49,9 +45,6 @@
     ],
     "React-logger": [
       "0.71.11"
-    ],
-    "hermes-engine": [
-
     ]
   }
 }

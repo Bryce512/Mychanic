@@ -21,20 +21,10 @@
     "CLANG_CXX_LANGUAGE_STANDARD": "c++17"
   },
   "dependencies": {
-    "React-Core": [
-
-    ],
-    "RCT-Folly": [
-
-    ],
-    "RCTRequired": [
-
-    ],
-    "RCTTypeSafety": [
-
-    ],
-    "ReactCommon/turbomodule/core": [
-
-    ]
+    "React-Core": [],
+    "RCT-Folly": [],
+    "RCTRequired": [],
+    "RCTTypeSafety": [],
+    "ReactCommon/turbomodule/core": []
   }
 }

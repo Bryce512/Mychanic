@@ -52,15 +52,8 @@
         "RCT-Folly": [
           "2021.07.22.00"
         ],
-        "DoubleConversion": [
-
-        ],
-        "glog": [
-
-        ],
-        "hermes-engine": [
-
-        ]
+        "DoubleConversion": [],
+        "glog": []
       },
       "subspecs": [
         {
@@ -68,9 +61,6 @@
           "dependencies": {
             "React-jsi": [
               "0.71.11"
-            ],
-            "hermes-engine": [
-
             ]
           },
           "source_files": "react/bridging/**/*.{cpp,h}",
