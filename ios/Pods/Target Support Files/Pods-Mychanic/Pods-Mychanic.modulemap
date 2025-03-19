@@ -1,6 +1,0 @@
-module Pods_Mychanic {
-  umbrella header "Pods-Mychanic-umbrella.h"
-
-  export *
-  module * { export * }
-}

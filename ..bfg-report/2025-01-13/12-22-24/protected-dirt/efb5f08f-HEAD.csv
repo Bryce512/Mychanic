@@ -1,5 +1,0 @@
-80661660ae8984aa9a055bdbeae944fbd3e5385e,DELETE,executable,ios/Pods/hermes-engine/destroot/Library/Frameworks/macosx/hermes.framework/Versions/0/hermes,6645288,
-992c6b7d30d9708571104c127823ef3fb3cc0e63,DELETE,symlink,ios/Pods/hermes-engine/destroot/Library/Frameworks/macosx/hermes.framework/hermes,23,
-992c6b7d30d9708571104c127823ef3fb3cc0e63,DELETE,symlink,ios/Pods/hermes-engine/destroot/Library/Frameworks/universal/hermes.xcframework/ios-arm64_x86_64-maccatalyst/hermes.framework/hermes,23,
-5fe7b01e0d486ee121f3b14874cc032425e81595,DELETE,executable,ios/Pods/hermes-engine/destroot/Library/Frameworks/universal/hermes.xcframework/ios-arm64_x86_64-simulator/hermes.framework/hermes,6645288,
-5831104dab5c131811b982f8234e6954b3492e25,DELETE,executable,ios/Pods/hermes-engine/destroot/bin/hermes,7415496,
