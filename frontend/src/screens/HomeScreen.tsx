@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, Image, ScrollView, Alert } from "react-native";
 import AllIcons from "../assets/icons/Imported_Icons";
+import { navigate } from "../services/navigationServices"; // Import the function
 import { TouchableOpacity } from "react-native-gesture-handler";
 import { useNavigation } from "@react-navigation/native";
 import Progress_bar from "../components/ProgressBar";
@@ -19,7 +20,7 @@ const CustomHeader: React.FC<{ goToScreen: (routeName: keyof RootStackParamList)
     <View style={theme.headerBackground} />
     <Text style={theme.headerText}>My Garage</Text>
     <View style={theme.settingsButtonContainer}>
-      <TouchableOpacity onPress={() => goToScreen("CarDashboard", { carId: "someCarId" })}>
+      <TouchableOpacity onPress={() => navigate("CarDashboard", { carId: "123" })}>
         <AllIcons.MatComIcons name="cog" size={30} style={theme.settingsIcon} />
       </TouchableOpacity>
     </View>
@@ -32,7 +33,7 @@ const TabBar: React.FC<{ goToScreen: (routeName: keyof RootStackParamList) => vo
   <View style={theme.tabContainer}>
     <View style={theme.tabBackground} />
     <View style={theme.tabButton}>
-      <TouchableOpacity onPress={() => useNavigation.navigate("CarDashboard", { carId: "someCarId" })
+      <TouchableOpacity onPress={() => navigate("CarDashboard", { carId: "someCarId" })
 }>
         <AllIcons.MatComIcons
           name="car-wrench"
@@ -43,7 +44,7 @@ const TabBar: React.FC<{ goToScreen: (routeName: keyof RootStackParamList) => vo
       </TouchableOpacity>
     </View>
     <View style={theme.tabButton}>
-      <TouchableOpacity onPress={() => goToScreen("ClickMenu")}>
+      <TouchableOpacity onPress={() => navigate("ClickMenu")}>
         <AllIcons.MatComIcons
           name="account-wrench"
           size={55}
@@ -104,11 +105,6 @@ const ImageWithColorBox: React.FC<{ onDelete: () => void }> = ({
 };
 
 const HomeScreen: React.FC = () => {
-  const navigation = useNavigation<HomeScreenNavigationProp>();
-
-const goToScreen = (routeName: keyof RootStackParamList, params?: object) => {
-  navigation.navigate(routeName, params);
-};
 
   const [imageBoxes, setImageBoxes] = useState<{ key: string }[]>([]);
 
@@ -150,13 +146,13 @@ const goToScreen = (routeName: keyof RootStackParamList, params?: object) => {
           />
         ))}
       </ScrollView>
-      <CustomHeader goToScreen={goToScreen} />
+      <CustomHeader goToScreen={navigate} />
       <View style={style.addButtonContainer}>
         <TouchableOpacity style={style.addButton} onPress={addImageBox}>
           <AllIcons.Entyp name="plus" size={45} style={theme.settingsIcon} />
         </TouchableOpacity>
       </View>
-      <TabBar goToScreen={goToScreen} />
+      <TabBar goToScreen={navigate} />
     </View>
   );
 };

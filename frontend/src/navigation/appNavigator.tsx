@@ -1,9 +1,11 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { NavigationContainer } from "@react-navigation/native";
+import { navigationRef } from "../services/navigationServices"; // Import navigationRef
 import HomeScreen from "../screens/HomeScreen";
 import CarDashboard from "../screens/carDashboard";
 import ScanDevicesScreen from "../screens/ScanDevices";
+
 import SettingsScreen from "../screens/settings";
 import ClickMenuScreen from "../screens/ClickMenu";
 
@@ -19,7 +21,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const AppNavigator = () => {
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="CarDashboard" component={CarDashboard} />

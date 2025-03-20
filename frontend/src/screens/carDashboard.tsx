@@ -11,7 +11,6 @@ type Props = NativeStackScreenProps<RootStackParamList, "CarDashboard">;
 const CarDashboard: React.FC<Props> = ({ route }) => {
   // Access carId from the route.params
   const { carId } = route.params;
-
   const [car, setCar] = useState<Car | null>(null);
   const [loading, setLoading] = useState(true);
 

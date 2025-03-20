@@ -1,9 +1,9 @@
 import React from 'react';
 import {View, Text, StyleSheet} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
 import {TouchableOpacity} from 'react-native-gesture-handler';
 import theme from '../styles/StylizedComponents';
 import DiagButton from '../components/DiagButton';
+import { navigate } from '../services/navigationServices';
 
 interface Props {
   theme: any;
@@ -13,17 +13,14 @@ interface Props {
 }
 
 const ClickScreen: React.FC<Props> = () => {
-  const navigation = useNavigation();
-  const goToScreen = (routeName: string) => {
-    navigation.navigate(routeName);
-  };
+
 
   return (
     <View style={theme.homeView}>
       <View style={style.libButtonCont}>
         <TouchableOpacity
           style={style.dashLibraryButton}
-          onPress={() => goToScreen('DashLib')}>
+          onPress={() => navigate("DashLib")}>
           <Text style={style.dashLibraryButtonText}>Dashlight Library</Text>
         </TouchableOpacity>
       </View>
@@ -31,18 +28,18 @@ const ClickScreen: React.FC<Props> = () => {
       <View style={style.menuButtonContainer}>
         <DiagButton
           text="Making Sounds"
-          onPress={() => goToScreen('SoundScreen')}
+          onPress={() => navigate("SoundScreen")}
         />
         <DiagButton
           text="Feels Wrong"
-          onPress={() => goToScreen('FeelScreen')}
+          onPress={() => navigate("FeelScreen")}
         />
         <DiagButton
           text="Not Working Right"
-          onPress={() => goToScreen('NotWorking')}
+          onPress={() => navigate("NotWorking")}
         />
-        <DiagButton text="Looks Wrong" onPress={() => goToScreen('Looks')} />
-        <DiagButton text="Smells Wrong" onPress={() => goToScreen('Smells')} />
+        <DiagButton text="Looks Wrong" onPress={() => navigate("Looks")} />
+        <DiagButton text="Smells Wrong" onPress={() => navigate("Smells")} />
       </View>
     </View>
   );

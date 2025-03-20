@@ -1,6 +1,21 @@
 import firestore from "@react-native-firebase/firestore";
-import { Car, Session, DTCLog } from "./src/types";
+import auth from "@react-native-firebase/auth";
+import storage from "@react-native-firebase/storage";
+import { FirebaseApp, initializeApp } from "@react-native-firebase/app";
 
+// ✅ Firebase Configuration (Fix `storageBucket`!)
+const firebaseConfig = {
+  apiKey: "AIzaSyCkTvizBpmaxVJFAWbwL9BcbL93daDMMWE",
+  authDomain: "fluid-tangent-405719.firebaseapp.com",
+  databaseURL: "https://fluid-tangent-405719-default-rtdb.firebaseio.com",
+  projectId: "fluid-tangent-405719",
+  storageBucket: "fluid-tangent-405719.appspot.com", // ✅ Fixed
+  messagingSenderId: "578434461817",
+  appId: "1:578434461817:web:d336ebf5d1e7188dc524a8",
+};
+
+// ✅ Initialize Firebase
+const app = initializeApp(firebaseConfig);
 
 // 🔹 Get User Data
 export const getUser = async (userId) => {
@@ -9,34 +24,31 @@ export const getUser = async (userId) => {
     return userDoc.exists ? userDoc.data() : null;
   } catch (error) {
     console.error("Error fetching user:", error);
+    return null;
   }
 };
 
-// 🔹 Fetch Car Data with Proper Type Casting
+// 🔹 Fetch Car Data
 export const getCarData = async (carId) => {
   try {
-    const carDoc = await firestore().collection('cars').doc(carId).get();
-    
+    const carDoc = await firestore().collection("cars").doc(carId).get();
     if (!carDoc.exists) return null;
 
-    const carData = carDoc.data(); // Get document data
-    if (!carData) return null;
-
-    // ✅ Ensure full Car object structure
+    const carData = carDoc.data();
     return {
       id: carDoc.id,
-      make: carData.make || '',
-      model: carData.model || '',
-      year: carData.year || 0,
-      vin: carData.vin || undefined, // Optional field
-    } ;
+      make: carData?.make || "",
+      model: carData?.model || "",
+      year: carData?.year || 0,
+      vin: carData?.vin || undefined,
+    };
   } catch (error) {
     console.error("Error fetching car data:", error);
     return null;
   }
 };
 
-// 🔹 Get Latest Session Data
+// 🔹 Get Latest OBD-II Session
 export const getLatestSession = async (carId) => {
   try {
     const sessionSnapshot = await firestore()
@@ -49,11 +61,16 @@ export const getLatestSession = async (carId) => {
     return sessionSnapshot.docs.map((doc) => doc.data())[0] || null;
   } catch (error) {
     console.error("Error fetching latest session:", error);
+    return null;
   }
 };
 
 // 🔹 Save a New OBD-II Session
-export const saveSession = async (carId, userId, dataPoints) => {
+export const saveSession = async (
+  carId,
+  userId,
+  dataPoints,
+) => {
   try {
     const newSession = {
       carId,
@@ -68,8 +85,13 @@ export const saveSession = async (carId, userId, dataPoints) => {
   }
 };
 
-// 🔹 Save a DTC Event
-export const saveDTCLog = async (carId, userId, dtcCode, context) => {
+// 🔹 Save a DTC Log
+export const saveDTCLog = async (
+  carId,
+  userId,
+  dtcCode,
+  context,
+) => {
   try {
     const newLog = {
       carId,

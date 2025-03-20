@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		00E356F31AD99517003FC87E /* MychanicTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 00E356F21AD99517003FC87E /* MychanicTests.m */; };
+		023114382D8B759B0063EEF2 /* libRNFBApp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 023113DB2D8B74320063EEF2 /* libRNFBApp.a */; };
+		023114392D8B759B0063EEF2 /* libRNFBAuth.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 023113DD2D8B74320063EEF2 /* libRNFBAuth.a */; };
+		0231143A2D8B759B0063EEF2 /* libRNFBFirestore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 023113DF2D8B74320063EEF2 /* libRNFBFirestore.a */; };
 		0FE06B1D7A601BD636D512BB /* libPods-Mychanic-MychanicTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B99346EBD51DB75B67C82BF6 /* libPods-Mychanic-MychanicTests.a */; };
 		13B07FBC1A68108700A75B9A /* AppDelegate.mm in Sources */ = {isa = PBXBuildFile; fileRef = 13B07FB01A68108700A75B9A /* AppDelegate.mm */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
@@ -39,6 +42,258 @@
 			proxyType = 1;
 			remoteGlobalIDString = 13B07F861A680F5B00A75B9A;
 			remoteInfo = Mychanic;
+		};
+		023113982D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = BF96B57ADE05E8909F823BDF6868B3E3;
+			remoteInfo = abseil;
+		};
+		0231139A2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 3A6766BF64A8C96ACC94313C935C8573;
+			remoteInfo = "abseil-xcprivacy";
+		};
+		0231139C2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 514D7742C6CBB0BDBD9984AEE97DDFDE;
+			remoteInfo = "BoringSSL-GRPC";
+		};
+		0231139E2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 15B2AAC35D0FDBFDEB69A9FC675DC516;
+			remoteInfo = "BoringSSL-GRPC-openssl_grpc";
+		};
+		023113A02D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 81418C93A311F0492F62A8F88C3BD66B;
+			remoteInfo = FirebaseAppCheckInterop;
+		};
+		023113A22D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 43B1E4CD7B30B9FD278100133C2AC788;
+			remoteInfo = FirebaseAuth;
+		};
+		023113A42D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 75BE3742280F17326166DFF0B2AC4FAE;
+			remoteInfo = "FirebaseAuth-FirebaseAuth_Privacy";
+		};
+		023113A62D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 09D8B108F8926BC5DC78684FF235123E;
+			remoteInfo = FirebaseAuthInterop;
+		};
+		023113A82D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = E2B63D462DB7F827C4B11FD51E4F8E2D;
+			remoteInfo = FirebaseCore;
+		};
+		023113AA2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 8BB937B1C0DFFCF92F41861C2BC54DDA;
+			remoteInfo = "FirebaseCore-FirebaseCore_Privacy";
+		};
+		023113AC2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = AEF1DC80F0EB62580B81D18786BAF924;
+			remoteInfo = FirebaseCoreExtension;
+		};
+		023113AE2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = ECAC028550A03412C51913B85686D98B;
+			remoteInfo = "FirebaseCoreExtension-FirebaseCoreExtension_Privacy";
+		};
+		023113B02D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 148D0F9E8C7373FEAF40D800FC5F1BAA;
+			remoteInfo = FirebaseCoreInternal;
+		};
+		023113B22D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 4DB03FD262B678178A44272143846563;
+			remoteInfo = "FirebaseCoreInternal-FirebaseCoreInternal_Privacy";
+		};
+		023113B42D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 92000153CD73F7FC2DBAB4AB708269F3;
+			remoteInfo = FirebaseFirestore;
+		};
+		023113B62D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = B6FC6D7893981399354A5310B0C34D02;
+			remoteInfo = "FirebaseFirestore-FirebaseFirestore_Privacy";
+		};
+		023113B82D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = C6C0434B66B1A1EA497F81126A2C4DC6;
+			remoteInfo = FirebaseFirestoreInternal;
+		};
+		023113BA2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 62B963135E1B5D0D0871A62C8DC29B85;
+			remoteInfo = "FirebaseFirestoreInternal-FirebaseFirestoreInternal_Privacy";
+		};
+		023113BC2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 519172F62353C84795D05BA8A499936B;
+			remoteInfo = FirebaseSharedSwift;
+		};
+		023113BE2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = B43874C6CBB50E7134FBEC24BABFE14F;
+			remoteInfo = GoogleUtilities;
+		};
+		023113C02D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 44E291D18340EAC3F761346198515323;
+			remoteInfo = "GoogleUtilities-GoogleUtilities_Privacy";
+		};
+		023113C22D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 1911113E0FBF13CFF9132E5FF7685228;
+			remoteInfo = "gRPC-C++";
+		};
+		023113C42D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 9C7C87B5D0A6752AFA2642F1BCA967A3;
+			remoteInfo = "gRPC-C++-gRPCCertificates-Cpp";
+		};
+		023113C62D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 28F341633BC96126DD3A7030F0B54124;
+			remoteInfo = "gRPC-C++-grpcpp";
+		};
+		023113C82D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = B471867C535B02FA55D87E260F6480F8;
+			remoteInfo = "gRPC-Core";
+		};
+		023113CA2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 3A6314653B568326014FEB5B7B3E6ABB;
+			remoteInfo = "gRPC-Core-grpc";
+		};
+		023113CC2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = C1998E0D8085221AD87F89B614C10E52;
+			remoteInfo = GTMSessionFetcher;
+		};
+		023113CE2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = E826FA0DCB9AA6E7829C68391B323B78;
+			remoteInfo = "GTMSessionFetcher-GTMSessionFetcher_Core_Privacy";
+		};
+		023113D02D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 0A9F46A999C47653013D3AD854352507;
+			remoteInfo = "leveldb-library";
+		};
+		023113D22D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 5F8C1626C73591959F16DB1CE2536F54;
+			remoteInfo = "leveldb-library-leveldb_Privacy";
+		};
+		023113D42D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 06FC5C9CF96D60C50FCD47D339C91951;
+			remoteInfo = nanopb;
+		};
+		023113D62D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 3227F3FC45681D7CEE5D1355A532398A;
+			remoteInfo = "nanopb-nanopb_Privacy";
+		};
+		023113D82D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 33D34D2210961B1CBFEC1D194B0AAB9F;
+			remoteInfo = RecaptchaInterop;
+		};
+		023113DA2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 18D0B1E13C69654196028DD6EDCC3452;
+			remoteInfo = RNFBApp;
+		};
+		023113DC2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 01CA77A5E34D4B91FF51C12388C1CF97;
+			remoteInfo = RNFBAuth;
+		};
+		023113DE2D8B74320063EEF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B9B422A31347100D58AAE /* Pods.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 1492B8126E174E9B7DC3748278EF2DFD;
+			remoteInfo = RNFBFirestore;
 		};
 		02ABA2AA2D3EFEF500F618B0 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -352,6 +607,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				023114382D8B759B0063EEF2 /* libRNFBApp.a in Frameworks */,
+				023114392D8B759B0063EEF2 /* libRNFBAuth.a in Frameworks */,
+				0231143A2D8B759B0063EEF2 /* libRNFBFirestore.a in Frameworks */,
 				C30620EF66D77143BEB457C9 /* libPods-Mychanic.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -435,10 +693,42 @@
 		3A9B9B432A31347100D58AAE /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				023113992D8B74320063EEF2 /* libabseil.a */,
+				0231139B2D8B74320063EEF2 /* xcprivacy.bundle */,
+				0231139D2D8B74320063EEF2 /* libBoringSSL-GRPC.a */,
+				0231139F2D8B74320063EEF2 /* openssl_grpc.bundle */,
 				3A9B9B7E2A31347200D58AAE /* libDoubleConversion.a */,
+				023113A12D8B74320063EEF2 /* libFirebaseAppCheckInterop.a */,
+				023113A32D8B74320063EEF2 /* libFirebaseAuth.a */,
+				023113A52D8B74320063EEF2 /* FirebaseAuth_Privacy.bundle */,
+				023113A72D8B74320063EEF2 /* libFirebaseAuthInterop.a */,
+				023113A92D8B74320063EEF2 /* libFirebaseCore.a */,
+				023113AB2D8B74320063EEF2 /* FirebaseCore_Privacy.bundle */,
+				023113AD2D8B74320063EEF2 /* libFirebaseCoreExtension.a */,
+				023113AF2D8B74320063EEF2 /* FirebaseCoreExtension_Privacy.bundle */,
+				023113B12D8B74320063EEF2 /* libFirebaseCoreInternal.a */,
+				023113B32D8B74320063EEF2 /* FirebaseCoreInternal_Privacy.bundle */,
+				023113B52D8B74320063EEF2 /* libFirebaseFirestore.a */,
+				023113B72D8B74320063EEF2 /* FirebaseFirestore_Privacy.bundle */,
+				023113B92D8B74320063EEF2 /* libFirebaseFirestoreInternal.a */,
+				023113BB2D8B74320063EEF2 /* FirebaseFirestoreInternal_Privacy.bundle */,
+				023113BD2D8B74320063EEF2 /* libFirebaseSharedSwift.a */,
 				3A9B9B8E2A31347200D58AAE /* libfmt.a */,
 				3A9B9B902A31347200D58AAE /* libglog.a */,
+				023113BF2D8B74320063EEF2 /* libGoogleUtilities.a */,
+				023113C12D8B74320063EEF2 /* GoogleUtilities_Privacy.bundle */,
+				023113C32D8B74320063EEF2 /* libgRPC-C++.a */,
+				023113C52D8B74320063EEF2 /* gRPCCertificates-Cpp.bundle */,
+				023113C72D8B74320063EEF2 /* grpcpp.bundle */,
+				023113C92D8B74320063EEF2 /* libgRPC-Core.a */,
+				023113CB2D8B74320063EEF2 /* grpc.bundle */,
+				023113CD2D8B74320063EEF2 /* libGTMSessionFetcher.a */,
+				023113CF2D8B74320063EEF2 /* GTMSessionFetcher_Core_Privacy.bundle */,
+				023113D12D8B74320063EEF2 /* libleveldb-library.a */,
+				023113D32D8B74320063EEF2 /* leveldb_Privacy.bundle */,
 				3A9B9B942A31347200D58AAE /* libMultiplatformBleAdapter.a */,
+				023113D52D8B74320063EEF2 /* libnanopb.a */,
+				023113D72D8B74320063EEF2 /* nanopb_Privacy.bundle */,
 				3A9B9B962A31347200D58AAE /* libPods-Mychanic.a */,
 				3A9B9B982A31347200D58AAE /* libPods-Mychanic-MychanicTests.a */,
 				3A9B9B9A2A31347200D58AAE /* libRCT-Folly.a */,
@@ -466,6 +756,10 @@
 				3A9B9BC42A31347200D58AAE /* libReact-RCTText.a */,
 				3A9B9BC62A31347200D58AAE /* libReact-RCTVibration.a */,
 				3A9B9BC82A31347200D58AAE /* libReactCommon.a */,
+				023113D92D8B74320063EEF2 /* libRecaptchaInterop.a */,
+				023113DB2D8B74320063EEF2 /* libRNFBApp.a */,
+				023113DD2D8B74320063EEF2 /* libRNFBAuth.a */,
+				023113DF2D8B74320063EEF2 /* libRNFBFirestore.a */,
 				3A2B53692A5F4E600062B426 /* libRNGestureHandler.a */,
 				3A2B536B2A5F4E600062B426 /* libRNScreens.a */,
 				3A86F33D2A81B75E0011D007 /* libRNSVG.a */,
@@ -553,6 +847,7 @@
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				010193B8C83C4C66F3DAC60C /* [CP] Copy Pods Resources */,
+				D16C3DFBC8E38CAD63C12DE9 /* [CP-User] [RNFB] Core Configuration */,
 			);
 			buildRules = (
 			);
@@ -610,6 +905,258 @@
 /* End PBXProject section */
 
 /* Begin PBXReferenceProxy section */
+		023113992D8B74320063EEF2 /* libabseil.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libabseil.a;
+			remoteRef = 023113982D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		0231139B2D8B74320063EEF2 /* xcprivacy.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = xcprivacy.bundle;
+			remoteRef = 0231139A2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		0231139D2D8B74320063EEF2 /* libBoringSSL-GRPC.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = "libBoringSSL-GRPC.a";
+			remoteRef = 0231139C2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		0231139F2D8B74320063EEF2 /* openssl_grpc.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = openssl_grpc.bundle;
+			remoteRef = 0231139E2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113A12D8B74320063EEF2 /* libFirebaseAppCheckInterop.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libFirebaseAppCheckInterop.a;
+			remoteRef = 023113A02D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113A32D8B74320063EEF2 /* libFirebaseAuth.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libFirebaseAuth.a;
+			remoteRef = 023113A22D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113A52D8B74320063EEF2 /* FirebaseAuth_Privacy.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = FirebaseAuth_Privacy.bundle;
+			remoteRef = 023113A42D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113A72D8B74320063EEF2 /* libFirebaseAuthInterop.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libFirebaseAuthInterop.a;
+			remoteRef = 023113A62D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113A92D8B74320063EEF2 /* libFirebaseCore.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libFirebaseCore.a;
+			remoteRef = 023113A82D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113AB2D8B74320063EEF2 /* FirebaseCore_Privacy.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = FirebaseCore_Privacy.bundle;
+			remoteRef = 023113AA2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113AD2D8B74320063EEF2 /* libFirebaseCoreExtension.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libFirebaseCoreExtension.a;
+			remoteRef = 023113AC2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113AF2D8B74320063EEF2 /* FirebaseCoreExtension_Privacy.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = FirebaseCoreExtension_Privacy.bundle;
+			remoteRef = 023113AE2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113B12D8B74320063EEF2 /* libFirebaseCoreInternal.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libFirebaseCoreInternal.a;
+			remoteRef = 023113B02D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113B32D8B74320063EEF2 /* FirebaseCoreInternal_Privacy.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = FirebaseCoreInternal_Privacy.bundle;
+			remoteRef = 023113B22D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113B52D8B74320063EEF2 /* libFirebaseFirestore.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libFirebaseFirestore.a;
+			remoteRef = 023113B42D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113B72D8B74320063EEF2 /* FirebaseFirestore_Privacy.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = FirebaseFirestore_Privacy.bundle;
+			remoteRef = 023113B62D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113B92D8B74320063EEF2 /* libFirebaseFirestoreInternal.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libFirebaseFirestoreInternal.a;
+			remoteRef = 023113B82D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113BB2D8B74320063EEF2 /* FirebaseFirestoreInternal_Privacy.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = FirebaseFirestoreInternal_Privacy.bundle;
+			remoteRef = 023113BA2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113BD2D8B74320063EEF2 /* libFirebaseSharedSwift.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libFirebaseSharedSwift.a;
+			remoteRef = 023113BC2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113BF2D8B74320063EEF2 /* libGoogleUtilities.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libGoogleUtilities.a;
+			remoteRef = 023113BE2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113C12D8B74320063EEF2 /* GoogleUtilities_Privacy.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = GoogleUtilities_Privacy.bundle;
+			remoteRef = 023113C02D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113C32D8B74320063EEF2 /* libgRPC-C++.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = "libgRPC-C++.a";
+			remoteRef = 023113C22D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113C52D8B74320063EEF2 /* gRPCCertificates-Cpp.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = "gRPCCertificates-Cpp.bundle";
+			remoteRef = 023113C42D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113C72D8B74320063EEF2 /* grpcpp.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = grpcpp.bundle;
+			remoteRef = 023113C62D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113C92D8B74320063EEF2 /* libgRPC-Core.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = "libgRPC-Core.a";
+			remoteRef = 023113C82D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113CB2D8B74320063EEF2 /* grpc.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = grpc.bundle;
+			remoteRef = 023113CA2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113CD2D8B74320063EEF2 /* libGTMSessionFetcher.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libGTMSessionFetcher.a;
+			remoteRef = 023113CC2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113CF2D8B74320063EEF2 /* GTMSessionFetcher_Core_Privacy.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = GTMSessionFetcher_Core_Privacy.bundle;
+			remoteRef = 023113CE2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113D12D8B74320063EEF2 /* libleveldb-library.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = "libleveldb-library.a";
+			remoteRef = 023113D02D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113D32D8B74320063EEF2 /* leveldb_Privacy.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = leveldb_Privacy.bundle;
+			remoteRef = 023113D22D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113D52D8B74320063EEF2 /* libnanopb.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libnanopb.a;
+			remoteRef = 023113D42D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113D72D8B74320063EEF2 /* nanopb_Privacy.bundle */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = nanopb_Privacy.bundle;
+			remoteRef = 023113D62D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113D92D8B74320063EEF2 /* libRecaptchaInterop.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libRecaptchaInterop.a;
+			remoteRef = 023113D82D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113DB2D8B74320063EEF2 /* libRNFBApp.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libRNFBApp.a;
+			remoteRef = 023113DA2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113DD2D8B74320063EEF2 /* libRNFBAuth.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libRNFBAuth.a;
+			remoteRef = 023113DC2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		023113DF2D8B74320063EEF2 /* libRNFBFirestore.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libRNFBFirestore.a;
+			remoteRef = 023113DE2D8B74320063EEF2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
 		02ABA2AB2D3EFEF500F618B0 /* libReact-jsc.a */ = {
 			isa = PBXReferenceProxy;
 			fileType = archive.ar;
@@ -1000,6 +1547,19 @@
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
+		};
+		D16C3DFBC8E38CAD63C12DE9 /* [CP-User] [RNFB] Core Configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "[CP-User] [RNFB] Core Configuration";
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "#!/usr/bin/env bash\n#\n# Copyright (c) 2016-present Invertase Limited & Contributors\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this library except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n#\n\n##########################################################################\n##########################################################################\n#\n#  NOTE THAT IF YOU CHANGE THIS FILE YOU MUST RUN pod install AFTERWARDS\n#\n#  This file is installed as an Xcode build script in the project file\n#  by cocoapods, and you will not see your changes until you pod install\n#\n##########################################################################\n##########################################################################\n\nset -e\n\n_MAX_LOOKUPS=2;\n_SEARCH_RESULT=''\n_RN_ROOT_EXISTS=''\n_CURRENT_LOOKUPS=1\n_JSON_ROOT=\"'react-native'\"\n_JSON_FILE_NAME='firebase.json'\n_JSON_OUTPUT_BASE64='e30=' # { }\n_CURRENT_SEARCH_DIR=${PROJECT_DIR}\n_PLIST_BUDDY=/usr/libexec/PlistBuddy\n_TARGET_PLIST=\"${BUILT_PRODUCTS_DIR}/${INFOPLIST_PATH}\"\n_DSYM_PLIST=\"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Info.plist\"\n\n# plist arrays\n_PLIST_ENTRY_KEYS=()\n_PLIST_ENTRY_TYPES=()\n_PLIST_ENTRY_VALUES=()\n\nfunction setPlistValue {\n  echo \"info:      setting plist entry '$1' of type '$2' in file '$4'\"\n  ${_PLIST_BUDDY} -c \"Add :$1 $2 '$3'\" $4 || echo \"info:      '$1' already exists\"\n}\n\nfunction getFirebaseJsonKeyValue () {\n  if [[ ${_RN_ROOT_EXISTS} ]]; then\n    ruby -Ku -e \"require 'rubygems';require 'json'; output=JSON.parse('$1'); puts output[$_JSON_ROOT]['$2']\"\n  else\n    echo \"\"\n  fi;\n}\n\nfunction jsonBoolToYesNo () {\n  if [[ $1 == \"false\" ]]; then\n    echo \"NO\"\n  elif [[ $1 == \"true\" ]]; then\n    echo \"YES\"\n  else echo \"NO\"\n  fi\n}\n\necho \"info: -> RNFB build script started\"\necho \"info: 1) Locating ${_JSON_FILE_NAME} file:\"\n\nif [[ -z ${_CURRENT_SEARCH_DIR} ]]; then\n  _CURRENT_SEARCH_DIR=$(pwd)\nfi;\n\nwhile true; do\n  _CURRENT_SEARCH_DIR=$(dirname \"$_CURRENT_SEARCH_DIR\")\n  if [[ \"$_CURRENT_SEARCH_DIR\" == \"/\" ]] || [[ ${_CURRENT_LOOKUPS} -gt ${_MAX_LOOKUPS} ]]; then break; fi;\n  echo \"info:      ($_CURRENT_LOOKUPS of $_MAX_LOOKUPS) Searching in '$_CURRENT_SEARCH_DIR' for a ${_JSON_FILE_NAME} file.\"\n  _SEARCH_RESULT=$(find \"$_CURRENT_SEARCH_DIR\" -maxdepth 2 -name ${_JSON_FILE_NAME} -print | /usr/bin/head -n 1)\n  if [[ ${_SEARCH_RESULT} ]]; then\n    echo \"info:      ${_JSON_FILE_NAME} found at $_SEARCH_RESULT\"\n    break;\n  fi;\n  _CURRENT_LOOKUPS=$((_CURRENT_LOOKUPS+1))\ndone\n\nif [[ ${_SEARCH_RESULT} ]]; then\n  _JSON_OUTPUT_RAW=$(cat \"${_SEARCH_RESULT}\")\n  _RN_ROOT_EXISTS=$(ruby -Ku -e \"require 'rubygems';require 'json'; output=JSON.parse('$_JSON_OUTPUT_RAW'); puts output[$_JSON_ROOT]\" || echo '')\n\n  if [[ ${_RN_ROOT_EXISTS} ]]; then\n    if ! python3 --version >/dev/null 2>&1; then echo \"python3 not found, firebase.json file processing error.\" && exit 1; fi\n    _JSON_OUTPUT_BASE64=$(python3 -c 'import json,sys,base64;print(base64.b64encode(bytes(json.dumps(json.loads(open('\"'${_SEARCH_RESULT}'\"', '\"'rb'\"').read())['${_JSON_ROOT}']), '\"'utf-8'\"')).decode())' || echo \"e30=\")\n  fi\n\n  _PLIST_ENTRY_KEYS+=(\"firebase_json_raw\")\n  _PLIST_ENTRY_TYPES+=(\"string\")\n  _PLIST_ENTRY_VALUES+=(\"$_JSON_OUTPUT_BASE64\")\n\n  # config.app_data_collection_default_enabled\n  _APP_DATA_COLLECTION_ENABLED=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"app_data_collection_default_enabled\")\n  if [[ $_APP_DATA_COLLECTION_ENABLED ]]; then\n    _PLIST_ENTRY_KEYS+=(\"FirebaseDataCollectionDefaultEnabled\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_APP_DATA_COLLECTION_ENABLED\")\")\n  fi\n\n  # config.analytics_auto_collection_enabled\n  _ANALYTICS_AUTO_COLLECTION=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"analytics_auto_collection_enabled\")\n  if [[ $_ANALYTICS_AUTO_COLLECTION ]]; then\n    _PLIST_ENTRY_KEYS+=(\"FIREBASE_ANALYTICS_COLLECTION_ENABLED\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_ANALYTICS_AUTO_COLLECTION\")\")\n  fi\n\n  # config.analytics_collection_deactivated\n  _ANALYTICS_DEACTIVATED=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"analytics_collection_deactivated\")\n  if [[ $_ANALYTICS_DEACTIVATED ]]; then\n    _PLIST_ENTRY_KEYS+=(\"FIREBASE_ANALYTICS_COLLECTION_DEACTIVATED\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_ANALYTICS_DEACTIVATED\")\")\n  fi\n\n  # config.analytics_idfv_collection_enabled\n  _ANALYTICS_IDFV_COLLECTION=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"analytics_idfv_collection_enabled\")\n  if [[ $_ANALYTICS_IDFV_COLLECTION ]]; then\n    _PLIST_ENTRY_KEYS+=(\"GOOGLE_ANALYTICS_IDFV_COLLECTION_ENABLED\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_ANALYTICS_IDFV_COLLECTION\")\")\n  fi\n\n  # config.analytics_default_allow_analytics_storage\n  _ANALYTICS_STORAGE=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"analytics_default_allow_analytics_storage\")\n  if [[ $_ANALYTICS_STORAGE ]]; then\n    _PLIST_ENTRY_KEYS+=(\"GOOGLE_ANALYTICS_DEFAULT_ALLOW_ANALYTICS_STORAGE\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_ANALYTICS_STORAGE\")\")\n  fi\n\n  # config.analytics_default_allow_ad_storage\n  _ANALYTICS_AD_STORAGE=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"analytics_default_allow_ad_storage\")\n  if [[ $_ANALYTICS_AD_STORAGE ]]; then\n    _PLIST_ENTRY_KEYS+=(\"GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_STORAGE\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_ANALYTICS_AD_STORAGE\")\")\n  fi\n\n  # config.analytics_default_allow_ad_user_data\n  _ANALYTICS_AD_USER_DATA=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"analytics_default_allow_ad_user_data\")\n  if [[ $_ANALYTICS_AD_USER_DATA ]]; then\n    _PLIST_ENTRY_KEYS+=(\"GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_USER_DATA\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_ANALYTICS_AD_USER_DATA\")\")\n  fi\n\n  # config.analytics_default_allow_ad_personalization_signals\n  _ANALYTICS_PERSONALIZATION=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"analytics_default_allow_ad_personalization_signals\")\n  if [[ $_ANALYTICS_PERSONALIZATION ]]; then\n    _PLIST_ENTRY_KEYS+=(\"GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_ANALYTICS_PERSONALIZATION\")\")\n  fi\n\n  # config.analytics_registration_with_ad_network_enabled\n  _ANALYTICS_REGISTRATION_WITH_AD_NETWORK=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"google_analytics_registration_with_ad_network_enabled\")\n  if [[ $_ANALYTICS_REGISTRATION_WITH_AD_NETWORK ]]; then\n    _PLIST_ENTRY_KEYS+=(\"GOOGLE_ANALYTICS_REGISTRATION_WITH_AD_NETWORK_ENABLED\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_ANALYTICS_REGISTRATION_WITH_AD_NETWORK\")\")\n  fi\n\n  # config.google_analytics_automatic_screen_reporting_enabled\n  _ANALYTICS_AUTO_SCREEN_REPORTING=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"google_analytics_automatic_screen_reporting_enabled\")\n  if [[ $_ANALYTICS_AUTO_SCREEN_REPORTING ]]; then\n    _PLIST_ENTRY_KEYS+=(\"FirebaseAutomaticScreenReportingEnabled\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_ANALYTICS_AUTO_SCREEN_REPORTING\")\")\n  fi\n\n  # config.perf_auto_collection_enabled\n  _PERF_AUTO_COLLECTION=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"perf_auto_collection_enabled\")\n  if [[ $_PERF_AUTO_COLLECTION ]]; then\n    _PLIST_ENTRY_KEYS+=(\"firebase_performance_collection_enabled\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_PERF_AUTO_COLLECTION\")\")\n  fi\n\n  # config.perf_collection_deactivated\n  _PERF_DEACTIVATED=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"perf_collection_deactivated\")\n  if [[ $_PERF_DEACTIVATED ]]; then\n    _PLIST_ENTRY_KEYS+=(\"firebase_performance_collection_deactivated\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_PERF_DEACTIVATED\")\")\n  fi\n\n  # config.messaging_auto_init_enabled\n  _MESSAGING_AUTO_INIT=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"messaging_auto_init_enabled\")\n  if [[ $_MESSAGING_AUTO_INIT ]]; then\n    _PLIST_ENTRY_KEYS+=(\"FirebaseMessagingAutoInitEnabled\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_MESSAGING_AUTO_INIT\")\")\n  fi\n\n  # config.in_app_messaging_auto_colllection_enabled\n  _FIAM_AUTO_INIT=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"in_app_messaging_auto_collection_enabled\")\n  if [[ $_FIAM_AUTO_INIT ]]; then\n    _PLIST_ENTRY_KEYS+=(\"FirebaseInAppMessagingAutomaticDataCollectionEnabled\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_FIAM_AUTO_INIT\")\")\n  fi\n\n  # config.app_check_token_auto_refresh\n  _APP_CHECK_TOKEN_AUTO_REFRESH=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"app_check_token_auto_refresh\")\n  if [[ $_APP_CHECK_TOKEN_AUTO_REFRESH ]]; then\n    _PLIST_ENTRY_KEYS+=(\"FirebaseAppCheckTokenAutoRefreshEnabled\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"$(jsonBoolToYesNo \"$_APP_CHECK_TOKEN_AUTO_REFRESH\")\")\n  fi\n\n  # config.crashlytics_disable_auto_disabler - undocumented for now - mainly for debugging, document if becomes useful\n  _CRASHLYTICS_AUTO_DISABLE_ENABLED=$(getFirebaseJsonKeyValue \"$_JSON_OUTPUT_RAW\" \"crashlytics_disable_auto_disabler\")\n  if [[ $_CRASHLYTICS_AUTO_DISABLE_ENABLED == \"true\" ]]; then\n    echo \"Disabled Crashlytics auto disabler.\" # do nothing\n  else\n    _PLIST_ENTRY_KEYS+=(\"FirebaseCrashlyticsCollectionEnabled\")\n    _PLIST_ENTRY_TYPES+=(\"bool\")\n    _PLIST_ENTRY_VALUES+=(\"NO\")\n  fi\nelse\n  _PLIST_ENTRY_KEYS+=(\"firebase_json_raw\")\n  _PLIST_ENTRY_TYPES+=(\"string\")\n  _PLIST_ENTRY_VALUES+=(\"$_JSON_OUTPUT_BASE64\")\n  echo \"warning:   A firebase.json file was not found, whilst this file is optional it is recommended to include it to configure firebase services in React Native Firebase.\"\nfi;\n\necho \"info: 2) Injecting Info.plist entries: \"\n\n# Log out the keys we're adding\nfor i in \"${!_PLIST_ENTRY_KEYS[@]}\"; do\n  echo \"    ->  $i) ${_PLIST_ENTRY_KEYS[$i]}\" \"${_PLIST_ENTRY_TYPES[$i]}\" \"${_PLIST_ENTRY_VALUES[$i]}\"\ndone\n\nfor plist in \"${_TARGET_PLIST}\" \"${_DSYM_PLIST}\" ; do\n  if [[ -f \"${plist}\" ]]; then\n\n    # paths with spaces break the call to setPlistValue. temporarily modify\n    # the shell internal field separator variable (IFS), which normally\n    # includes spaces, to consist only of line breaks\n    oldifs=$IFS\n    IFS=\"\n\"\n\n    for i in \"${!_PLIST_ENTRY_KEYS[@]}\"; do\n      setPlistValue \"${_PLIST_ENTRY_KEYS[$i]}\" \"${_PLIST_ENTRY_TYPES[$i]}\" \"${_PLIST_ENTRY_VALUES[$i]}\" \"${plist}\"\n    done\n\n    # restore the original internal field separator value\n    IFS=$oldifs\n  else\n    echo \"warning:   A Info.plist build output file was not found (${plist})\"\n  fi\ndone\n\necho \"info: <- RNFB build script finished\"\n";
 		};
 		FD10A7F022414F080027D42C /* Start Packager */ = {
 			isa = PBXShellScriptBuildPhase;
