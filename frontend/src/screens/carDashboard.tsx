@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { getCarData } from "../../firebaseConfig";
+import { ref, get } from "firebase/database"; // ✅ Import Realtime DB Methods
+import { db } from "../../firebaseConfig";
 import { RootStackParamList } from "../navigation/appNavigator";
 import { Car } from "../types";
 
@@ -14,10 +15,28 @@ const CarDashboard: React.FC<Props> = ({ route }) => {
   const [car, setCar] = useState<Car | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const getCarData = async (carId: string) => {
+    try {
+      const carRef = ref(db, `cars/${carId}`); // ✅ Reference the Car Data
+      const snapshot = await get(carRef); // ✅ Fetch Data Once
+
+      if (!snapshot.exists()) {
+        console.log("No car data found!");
+        return null;
+      }
+
+      return snapshot.val(); // ✅ Return Car Data
+    } catch (error) {
+      console.error("Error fetching car data:", error);
+      return null;
+    }
+  };
+
+
   useEffect(() => {
     const fetchData = async () => {
       const carData = await getCarData(carId);
-      setCar(carData); // ✅ No TypeScript error now!
+      setCar(carData);
       setLoading(false);
     };
 

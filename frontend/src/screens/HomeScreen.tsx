@@ -1,16 +1,59 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, Image, ScrollView, Alert } from "react-native";
 import AllIcons from "../assets/icons/Imported_Icons";
 import { navigate } from "../services/navigationServices"; // Import the function
 import { TouchableOpacity } from "react-native-gesture-handler";
-import { useNavigation } from "@react-navigation/native";
 import Progress_bar from "../components/ProgressBar";
 import theme from "../styles/StylizedComponents";
 import { RootStackParamList } from "../navigation/appNavigator";
 import { StackNavigationProp } from "@react-navigation/stack";
+import firebase, { db } from "../../firebaseConfig";
 
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
+
+
+// Add this function somewhere in your component
+
+// Update the test function
+const testFirebaseConnection = () => {
+  try {
+    console.log("Testing Firebase connection...");
+    console.log("Firebase imported:", firebase ? "YES" : "NO");
+    console.log("Database imported:", db ? "YES" : "NO");
+
+    // Only proceed if we have both Firebase and db
+    if (firebase && db) {
+      console.log("Attempting to write to Firestore...");
+
+      // Simple write operation
+      db.collection("test")
+        .doc("connection-test")
+        .set({
+          timestamp: new Date().toISOString(),
+          message: "Connection test successful",
+          testValue: Math.random(),
+        })
+        .then(() => {
+          console.log("Successfully wrote to Firestore!");
+        })
+        .catch((error) => {
+          console.error("Error writing to Firestore:", error);
+        });
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Firebase connection test failed:", error);
+    return false;
+  }
+};
+
+// Call this function when appropriate, e.g. in useEffect
+// useEffect(() => {
+//   testFirebaseConnection();
+// }, []);
+
 
 
 const CustomHeader: React.FC<{ goToScreen: (routeName: keyof RootStackParamList) => void }> = ({
@@ -20,7 +63,7 @@ const CustomHeader: React.FC<{ goToScreen: (routeName: keyof RootStackParamList)
     <View style={theme.headerBackground} />
     <Text style={theme.headerText}>My Garage</Text>
     <View style={theme.settingsButtonContainer}>
-      <TouchableOpacity onPress={() => navigate("CarDashboard", { carId: "123" })}>
+      <TouchableOpacity onPress={testFirebaseConnection}>
         <AllIcons.MatComIcons name="cog" size={30} style={theme.settingsIcon} />
       </TouchableOpacity>
     </View>

@@ -3,15 +3,18 @@ require_relative '../node_modules/@react-native-community/cli-platform-ios/nativ
 
 platform :ios, '16.0'
 prepare_react_native_project!
-use_modular_headers!
+# use_modular_headers!
 
 flipper_config = ENV['NO_FLIPPER'] == "1" ? FlipperConfiguration.disabled : FlipperConfiguration.enabled
 
-linkage = ENV['USE_FRAMEWORKS']
-if linkage != nil
-  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
-  use_frameworks! :linkage => :static  
-end
+# linkage = ENV['USE_FRAMEWORKS']
+# if linkage != nil
+#   Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
+#   use_frameworks! :linkage => :dynamic  
+#   use_modular_headers!
+# end
+
+use_modular_headers!
 
 target 'Mychanic' do
   config = use_native_modules!
@@ -33,6 +36,14 @@ target 'Mychanic' do
   pod 'RNFBApp', :path => '../node_modules/@react-native-firebase/app'
   pod 'RNFBAuth', :path => '../node_modules/@react-native-firebase/auth', :modular_headers => true
   pod 'RNFBFirestore', :path => '../node_modules/@react-native-firebase/firestore', :modular_headers => true
+  pod 'gRPC-Core', :modular_headers => true
+  pod 'gRPC-C++', :modular_headers => true
+  pod 'FirebaseAuth', :modular_headers => true
+  pod 'FirebaseCoreInternal', :modular_headers => true
+  pod 'FirebaseFirestore', :modular_headers => true
+  pod 'FirebaseAnalytics'
+  pod ‘Firebase/AnalyticsWithoutAdIdSupport’
+
 
   target 'MychanicTests' do
     inherit! :complete
