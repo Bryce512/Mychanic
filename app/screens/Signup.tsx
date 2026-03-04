@@ -91,7 +91,7 @@ export default function SignupScreen() {
                   const { error: signUpError, user } = await signUp(
                     email,
                     password,
-                    role
+                    role,
                   );
 
                   if (signUpError) {
@@ -106,7 +106,7 @@ export default function SignupScreen() {
                 }
               },
             },
-          ]
+          ],
         );
       } else {
         // Some other sign in error
@@ -133,7 +133,7 @@ export default function SignupScreen() {
     if (!cleanNumber.match(/^\+[1-9]\d{1,14}$/)) {
       Alert.alert(
         "Error",
-        "Please enter a valid phone number with country code (e.g., +1234567890)"
+        "Please enter a valid phone number with country code (e.g., +1234567890)",
       );
       return;
     }
@@ -167,7 +167,7 @@ export default function SignupScreen() {
       const { user, error } = await confirmPhoneCode(
         confirmation,
         verificationCode,
-        role
+        role,
       );
       if (error) {
         Alert.alert("Error", error.message);

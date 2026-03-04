@@ -31,7 +31,7 @@ export type UserRole = "user" | "mechanic" | "admin";
 // Utility function to check if user has required role
 export function hasRole(
   userRole: string | null | undefined,
-  allowedRoles: UserRole[]
+  allowedRoles: UserRole[],
 ): boolean {
   return userRole ? allowedRoles.includes(userRole as UserRole) : false;
 }
@@ -83,7 +83,7 @@ import ShareVehicle from "../screens/ShareVehicle";
 export type RootStackParamList = {
   Main: undefined;
   Login: undefined;
-  Signup: {role: string};
+  Signup: { role: string };
   BookAppointment: { mechanicId: number };
   JobDetails: { jobId: string };
   DiagnosticAssistant: undefined;
@@ -236,7 +236,7 @@ export default function AppNavigator() {
     "AppNavigator render - user:",
     user ? "logged in" : "not logged in",
     "isLoading:",
-    isLoading
+    isLoading,
   );
 
   if (isLoading) {
@@ -378,9 +378,9 @@ export default function AppNavigator() {
             options={{ title: "Full Diagnostics" }}
           />
           <Stack.Screen
-          name = "ShareVehicle"
-          component={ShareVehicle}
-          options={{ title: "Manage Drivers" }}
+            name="ShareVehicle"
+            component={ShareVehicle}
+            options={{ title: "Manage Drivers" }}
           />
         </>
       ) : (
@@ -388,16 +388,12 @@ export default function AppNavigator() {
           <Stack.Screen
             name="Login"
             component={LoginScreen}
-            options={{ title: "Login",
-              headerShown: false
-            }}
+            options={{ title: "Login", headerShown: false }}
           />
           <Stack.Screen
             name="Signup"
             component={SignupScreen}
-            options={{ title: "Sign Up",
-              headerShown: false
-             }}
+            options={{ title: "Sign Up", headerShown: false }}
           />
         </>
       )}

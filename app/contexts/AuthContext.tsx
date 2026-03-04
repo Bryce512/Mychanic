@@ -19,22 +19,22 @@ type AuthContextType = {
   signUp: (
     email: string,
     password: string,
-    role?: "user" | "mechanic"
+    role?: "user" | "mechanic",
   ) => Promise<{ error: any; user: FirebaseAuthTypes.User | null }>;
   signInWithPhone: (
     phoneNumber: string,
-    role?: "user" | "mechanic"
+    role?: "user" | "mechanic",
   ) => Promise<{ confirmation: any; error: any }>;
   confirmPhoneCode: (
     confirmation: any,
     verificationCode: string,
-    role?: "user" | "mechanic"
+    role?: "user" | "mechanic",
   ) => Promise<{ user: FirebaseAuthTypes.User | null; error: any }>;
   signInWithGoogle: (
-    role?: "user" | "mechanic"
+    role?: "user" | "mechanic",
   ) => Promise<{ user: FirebaseAuthTypes.User | null; error: any }>;
   signInWithApple: (
-    role?: "user" | "mechanic"
+    role?: "user" | "mechanic",
   ) => Promise<{ user: FirebaseAuthTypes.User | null; error: any }>;
   signOut: () => Promise<void>;
   toggleViewMode: () => void;
@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = firebaseService.onAuthChange(async (firebaseUser) => {
       console.log(
         "Auth state changed:",
-        firebaseUser ? "logged in" : "logged out"
+        firebaseUser ? "logged in" : "logged out",
       );
       if (firebaseUser) {
         // User is logged in
@@ -115,7 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Only allow toggling if user is a mechanic
     if (profile?.role === "mechanic") {
       setViewMode((prevMode) =>
-        prevMode === "mechanic" ? "user" : "mechanic"
+        prevMode === "mechanic" ? "user" : "mechanic",
       );
     }
   };
@@ -142,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (
     email: string,
     password: string,
-    role: "user" | "mechanic" = "user"
+    role: "user" | "mechanic" = "user",
   ) => {
     try {
       // Your existing sign up logic
@@ -177,7 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithPhoneAuth = async (
     phoneNumber: string,
-    role: "user" | "mechanic" = "user"
+    role: "user" | "mechanic" = "user",
   ) => {
     try {
       const response = await signInWithPhone(phoneNumber, role);
@@ -190,13 +190,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const confirmPhoneCodeAuth = async (
     confirmation: any,
     verificationCode: string,
-    role: "user" | "mechanic" = "user"
+    role: "user" | "mechanic" = "user",
   ) => {
     try {
       const response = await confirmPhoneCode(
         confirmation,
         verificationCode,
-        role
+        role,
       );
 
       // If phone verification successful, store user data
