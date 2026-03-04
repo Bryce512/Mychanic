@@ -677,13 +677,13 @@ export const getVehicles = async (userId: string) => {
     }
   };
 
-  // New format: owner field (primary owner)
+  // Primary owner
   try {
-    const ownerSnap = await getDocs(query(collection(db, "vehicles"), where("owner", "==", userId)));
+    const ownerSnap = await getDocs(query(collection(db, "vehicles"), where("ownerId", "==", userId)));
     ownerSnap.forEach(add);
   } catch { /* rules may reject */ }
 
-  // New format: drivers array (shared access)
+  // Shared driver
   try {
     const driversSnap = await getDocs(query(collection(db, "vehicles"), where("drivers", "array-contains", userId)));
     driversSnap.forEach(add);
@@ -695,10 +695,10 @@ export const getVehicles = async (userId: string) => {
     legacyArraySnap.forEach(add);
   } catch { /* rules may reject */ }
 
-  // Legacy: ownerId stored as a plain string
+  // Legacy: owner string field
   try {
-    const legacyStringSnap = await getDocs(query(collection(db, "vehicles"), where("ownerId", "==", userId)));
-    legacyStringSnap.forEach(add);
+    const legacyOwnerSnap = await getDocs(query(collection(db, "vehicles"), where("owner", "==", userId)));
+    legacyOwnerSnap.forEach(add);
   } catch { /* rules may reject */ }
 
   return vehicles;
@@ -708,7 +708,7 @@ export const addVehicle = async (userId: string, vehicleData: any) => {
   const db = getFirestore();
   const vehicleWithOwner = {
     ...vehicleData,
-    owner: userId,
+    ownerId: userId,
     drivers: [],
   };
   const vehiclesCol = collection(db, "vehicles");
@@ -758,11 +758,9 @@ export const removeVehicleOwner = async (
   const db = getFirestore();
   const vehicleRef = doc(db, "vehicles", vehicleId);
 
-  // Remove from both new (drivers) and legacy (ownerId) array formats.
-  // arrayRemove on a non-existent field is a safe no-op.
+  // Remove from ownerId array. Also remove from legacy drivers field as a safe no-op.
   await updateDoc(vehicleRef, {
     drivers: arrayRemove(driverUid),
-    ownerId: arrayRemove(driverUid),
   });
 
   // Delete the stored display profile separately — dynamic key + deleteField()
