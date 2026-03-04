@@ -380,7 +380,7 @@ export default function AppNavigator() {
           <Stack.Screen
           name = "ShareVehicle"
           component={ShareVehicle}
-          options={{title: "Share Vehicle"}}
+          options={{ title: "Manage Drivers" }}
           />
         </>
       ) : (

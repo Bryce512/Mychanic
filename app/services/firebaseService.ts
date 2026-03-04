@@ -1,4 +1,5 @@
 // Debug: Log all vehicles and their ownerId fields
+import appleAuth from "@invertase/react-native-apple-authentication";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { initializeApp, getApp, getApps } from "@react-native-firebase/app";
 import {
@@ -9,6 +10,7 @@ import {
   onAuthStateChanged,
   signInWithCredential,
   GoogleAuthProvider,
+  AppleAuthProvider,
   PhoneAuthProvider,
   signInWithPhoneNumber,
   linkWithCredential,
@@ -29,6 +31,7 @@ import {
   arrayRemove,
   documentId,
   getDoc,
+  deleteField,
 } from "@react-native-firebase/firestore";
 import type { FirebaseAuthTypes } from "@react-native-firebase/auth";
 import storage from "@react-native-firebase/storage";
@@ -426,6 +429,59 @@ export const signInWithGoogle = async (role?: "user" | "mechanic") => {
   }
 };
 
+// Apple Authentication
+export const signInWithApple = async (role?: "user" | "mechanic") => {
+  try {
+    const appleAuthRequestResponse = await appleAuth.performRequest({
+      requestedOperation: appleAuth.Operation.LOGIN,
+      requestedScopes: [appleAuth.Scope.EMAIL, appleAuth.Scope.FULL_NAME],
+    });
+
+    const { identityToken, nonce } = appleAuthRequestResponse;
+
+    if (!identityToken) {
+      return {
+        user: null,
+        error: {
+          code: "auth/apple-signin-error",
+          message: "Apple Sign-In failed - no identity token returned",
+        },
+      };
+    }
+
+    const appleCredential = AppleAuthProvider.credential(identityToken, nonce);
+    const auth = getAuth();
+    const userCredential = await signInWithCredential(auth, appleCredential);
+
+    // Create user profile in background (non-blocking)
+    setTimeout(async () => {
+      try {
+        await ensureUserProfile(userCredential.user, role);
+      } catch (firestoreError: any) {
+        console.warn(
+          "Background: Could not create user profile for Apple auth:",
+          firestoreError.code
+        );
+      }
+    }, 100);
+
+    return { user: userCredential.user, error: null };
+  } catch (error: any) {
+    console.error("Apple sign in error:", error);
+    if (error.code === "1001") {
+      return { user: null, error: null };
+    }
+    return {
+      user: null,
+      error: {
+        code: error.code || "auth/apple-signin-error",
+        message: "Failed to sign in with Apple",
+        originalError: error,
+      },
+    };
+  }
+};
+
 export const signOut = async () => {
   const auth = getAuth();
   return authSignOut(auth);
@@ -610,20 +666,41 @@ export const debugFirestoreData = async (userId: string) => {
 
 // Vehicle-specific functions
 export const getVehicles = async (userId: string) => {
-  console.log("running getVehicles for user:", userId);
   const db = getFirestore();
-  console.log("🚗 Querying vehicles from Firestore...");
-  const q = query(
-    collection(db, "vehicles"),
-    where("ownerId", "array-contains", userId)
-  );
-  const vehiclesSnapshot = await getDocs(q);
-
   const vehicles: any[] = [];
-  vehiclesSnapshot.forEach((doc: any) => {
-    const data = doc.data();
-    vehicles.push({ id: doc.id, ...data });
-  });
+  const seenIds = new Set<string>();
+
+  const add = (doc: any) => {
+    if (!seenIds.has(doc.id)) {
+      seenIds.add(doc.id);
+      vehicles.push({ id: doc.id, ...doc.data() });
+    }
+  };
+
+  // New format: owner field (primary owner)
+  try {
+    const ownerSnap = await getDocs(query(collection(db, "vehicles"), where("owner", "==", userId)));
+    ownerSnap.forEach(add);
+  } catch { /* rules may reject */ }
+
+  // New format: drivers array (shared access)
+  try {
+    const driversSnap = await getDocs(query(collection(db, "vehicles"), where("drivers", "array-contains", userId)));
+    driversSnap.forEach(add);
+  } catch { /* rules may reject */ }
+
+  // Legacy: ownerId stored as an array
+  try {
+    const legacyArraySnap = await getDocs(query(collection(db, "vehicles"), where("ownerId", "array-contains", userId)));
+    legacyArraySnap.forEach(add);
+  } catch { /* rules may reject */ }
+
+  // Legacy: ownerId stored as a plain string
+  try {
+    const legacyStringSnap = await getDocs(query(collection(db, "vehicles"), where("ownerId", "==", userId)));
+    legacyStringSnap.forEach(add);
+  } catch { /* rules may reject */ }
+
   return vehicles;
 };
 
@@ -631,7 +708,8 @@ export const addVehicle = async (userId: string, vehicleData: any) => {
   const db = getFirestore();
   const vehicleWithOwner = {
     ...vehicleData,
-    ownerId: [userId], // Array to allow multiple owners
+    owner: userId,
+    drivers: [],
   };
   const vehiclesCol = collection(db, "vehicles");
   const docRef = await addDoc(vehiclesCol, vehicleWithOwner);
@@ -656,35 +734,47 @@ export const deleteVehicle = async (userId: string, vehicleId: string) => {
   return true;
 };
 
-// Add an owner to a vehicle (for shared ownership)
+// Add a driver to a vehicle. Stores masked display info so no cross-user
+// reads are needed when listing drivers.
 export const addVehicleOwner = async (
   vehicleId: string,
-  newOwnerId: string
+  newOwnerId: string,
+  driverInfo: { name: string; maskedEmail: string }
 ) => {
   const db = getFirestore();
   const vehicleRef = doc(db, "vehicles", vehicleId);
   await updateDoc(vehicleRef, {
-    ownerId: arrayUnion(newOwnerId),
+    drivers: arrayUnion(newOwnerId),
+    [`driverProfiles.${newOwnerId}`]: driverInfo,
   });
-  // Also add the vehicle to the new owner's vehicleIds
-  const userRef = doc(db, "users", newOwnerId);
-  await updateDoc(userRef, { vehicleIds: arrayUnion(vehicleId) });
   return true;
 };
 
-// Remove an owner from a vehicle (for shared ownership)
+// Remove a driver from a vehicle and delete their stored display info.
 export const removeVehicleOwner = async (
   vehicleId: string,
-  ownerId: string
+  driverUid: string
 ) => {
   const db = getFirestore();
   const vehicleRef = doc(db, "vehicles", vehicleId);
+
+  // Remove from both new (drivers) and legacy (ownerId) array formats.
+  // arrayRemove on a non-existent field is a safe no-op.
   await updateDoc(vehicleRef, {
-    ownerId: arrayRemove(ownerId),
+    drivers: arrayRemove(driverUid),
+    ownerId: arrayRemove(driverUid),
   });
-  // Also remove the vehicle from the owner's vehicleIds
-  const userRef = doc(db, "users", ownerId);
-  await updateDoc(userRef, { vehicleIds: arrayRemove(vehicleId) });
+
+  // Delete the stored display profile separately — dynamic key + deleteField()
+  // in a combined updateDoc can fail on react-native-firebase.
+  try {
+    await updateDoc(vehicleRef, {
+      [`driverProfiles.${driverUid}`]: deleteField(),
+    });
+  } catch {
+    // Non-critical — just display metadata cleanup.
+  }
+
   return true;
 };
 
@@ -821,6 +911,7 @@ export default {
   signInWithPhone,
   confirmPhoneCode,
   signInWithGoogle,
+  signInWithApple,
   signOut,
   getCurrentUser,
   getJob,

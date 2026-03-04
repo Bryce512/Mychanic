@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import BleManager from "react-native-ble-manager";
 import { colors } from "../theme/colors";
 
 interface BluetoothDevice {
@@ -40,32 +39,6 @@ const BluetoothDeviceSelector: React.FC<BluetoothDeviceSelectorProps> = ({
 }) => {
   // Add state for showing all devices
   const [showAllDevices, setShowAllDevices] = useState(false);
-
-  useEffect(() => {
-    async function getAvailableDevices() {
-      if (visible && devices.length === 0 && !isScanning) {
-        try {
-          // Get directly from BleManager
-          const managerDevices = await BleManager.getDiscoveredPeripherals();
-          const namedDevices = managerDevices.filter((d) => d.name);
-
-          if (namedDevices.length > 0 && onUpdateDevices) {
-            const bluetoothDevices: BluetoothDevice[] = namedDevices.map((d) => ({
-              id: d.id,
-              name: d.name ?? null,
-              rssi: d.rssi,
-              // isConnectable: d.isConnectable, // Removed because Peripheral does not have this property
-            }));
-            onUpdateDevices(bluetoothDevices);
-          }
-        } catch (error) {
-          console.error("Failed to get devices", error);
-        }
-      }
-    }
-
-    getAvailableDevices();
-  }, [visible, devices.length, isScanning]);
 
   // Example of how the BluetoothDeviceSelector component should handle device selection
   const handleDeviceSelect = (device: BluetoothDevice) => {
@@ -109,7 +82,7 @@ const BluetoothDeviceSelector: React.FC<BluetoothDeviceSelectorProps> = ({
               {devices.length > 0 ? (
                 <FlatList
                   data={devices.filter((device) =>
-                    showAllDevices ? true : device.name
+                    showAllDevices ? true : device.name,
                   )}
                   keyExtractor={(item) => item.id}
                   style={styles.deviceList}

@@ -6,6 +6,7 @@ import firebaseService, {
   signInWithPhone,
   confirmPhoneCode,
   signInWithGoogle,
+  signInWithApple,
 } from "../services/firebaseService";
 import * as types from "../../types";
 
@@ -30,6 +31,9 @@ type AuthContextType = {
     role?: "user" | "mechanic"
   ) => Promise<{ user: FirebaseAuthTypes.User | null; error: any }>;
   signInWithGoogle: (
+    role?: "user" | "mechanic"
+  ) => Promise<{ user: FirebaseAuthTypes.User | null; error: any }>;
+  signInWithApple: (
     role?: "user" | "mechanic"
   ) => Promise<{ user: FirebaseAuthTypes.User | null; error: any }>;
   signOut: () => Promise<void>;
@@ -227,6 +231,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signInWithAppleAuth = async (role: "user" | "mechanic" = "user") => {
+    try {
+      const response = await signInWithApple(role);
+
+      if (response.user && !response.error) {
+        await AsyncStorage.setItem("userData", JSON.stringify(response.user));
+        setUser(response.user);
+        let profile = await getUserProfile(response.user.uid);
+        setProfile(profile || null);
+      }
+
+      return response;
+    } catch (error) {
+      return { user: null, error };
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -239,6 +260,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInWithPhone: signInWithPhoneAuth,
         confirmPhoneCode: confirmPhoneCodeAuth,
         signInWithGoogle: signInWithGoogleAuth,
+        signInWithApple: signInWithAppleAuth,
         signOut,
         toggleViewMode,
       }}

@@ -29,7 +29,6 @@ import { obdDataFunctions } from "../services/obdService";
 import BluetoothDeviceSelector from "../components/BluetoothDeviceSelector";
 import { useBluetooth } from "../contexts/BluetoothContext";
 import firebaseService from "../services/firebaseService";
-import BleManager from "react-native-ble-manager";
 import { scanDevicesStyles } from "../theme/styles/ScanDevices.styles";
 import { colors } from "../theme/colors";
 
@@ -37,34 +36,9 @@ const ScanDevicesScreen = () => {
   // Check Bluetooth status before scanning
   const checkBluetoothAndStartScan = async () => {
     try {
-      // On Android, check Bluetooth status
-      if (Platform.OS === "android") {
-        try {
-          const isEnabled = await BleManager.checkState();
-          if (isEnabled !== "on") {
-            Alert.alert(
-              "Bluetooth Disabled",
-              "Please enable Bluetooth to scan for devices."
-            );
-            return;
-          }
-        } catch (error) {
-          if (error && typeof error === "object" && "message" in error) {
-            console.error(
-              `Error checking Bluetooth state: ${
-                (error as { message: string }).message
-              }`
-            );
-          } else {
-            console.error(
-              `Error checking Bluetooth state: ${JSON.stringify(error)}`
-            );
-          }
-        }
-      }
       // If we get here, Bluetooth should be on
       console.log(
-        "Bluetooth is on. Setting showDeviceSelector to true and starting scan."
+        "Bluetooth is on. Setting showDeviceSelector to true and starting scan.",
       );
       setShowDeviceSelector(true);
       setDiscoveredDevices([]);
@@ -72,7 +46,7 @@ const ScanDevicesScreen = () => {
     } catch (error) {
       if (error && typeof error === "object" && "message" in error) {
         console.error(
-          `Error checking Bluetooth: ${(error as { message: string }).message}`
+          `Error checking Bluetooth: ${(error as { message: string }).message}`,
         );
       } else {
         console.error(`Error checking Bluetooth: ${JSON.stringify(error)}`);
@@ -118,8 +92,8 @@ const ScanDevicesScreen = () => {
 
   const fetchData = async () => {
     console.log("Fetching data not enabled yet");
-  }
- 
+  };
+
   // Check Bluetooth status before scanning
   // (Removed duplicate checkBluetoothAndStartScan definition)
 
@@ -266,7 +240,7 @@ const ScanDevicesScreen = () => {
         <>
           {console.log(
             "Rendering BluetoothDeviceSelector. showDeviceSelector:",
-            showDeviceSelector
+            showDeviceSelector,
           )}
         </>
         <BluetoothDeviceSelector
@@ -284,7 +258,7 @@ const ScanDevicesScreen = () => {
           onPress={() => {
             console.log(
               "Connection Status:",
-              isConnected ? "Connected" : "Disconnected"
+              isConnected ? "Connected" : "Disconnected",
             );
             console.log("Device ID:", deviceId);
             console.log("Device Name:", deviceName);
@@ -331,25 +305,25 @@ const ScanDevicesScreen = () => {
                       try {
                         const response = await sendCommand(
                           command.trim(),
-                          "53fc0537-e506-0bcf-81ec-e757067e9ed3"
+                          "53fc0537-e506-0bcf-81ec-e757067e9ed3",
                         );
                         Alert.alert(
                           "Response",
-                          `Command: ${command}\n\nResponse: ${response}`
+                          `Command: ${command}\n\nResponse: ${response}`,
                         );
                       } catch (err) {
                         Alert.alert(
                           "Command Error",
                           `Error sending command: ${
                             err instanceof Error ? err.message : String(err)
-                          }`
+                          }`,
                         );
                       }
                     },
                   },
                 ],
                 "plain-text",
-                "AT RV" // Default value
+                "AT RV", // Default value
               );
             } catch (error) {
               console.error("Error with test command:", error);
@@ -381,7 +355,7 @@ const ScanDevicesScreen = () => {
 
                         // Wait a moment
                         await new Promise((resolve) =>
-                          setTimeout(resolve, 1000)
+                          setTimeout(resolve, 1000),
                         );
 
                         // Reconnect with clean state
@@ -391,24 +365,24 @@ const ScanDevicesScreen = () => {
                             Alert.alert(
                               "Reconnected",
                               "Connection has been re-established with proper service discovery.",
-                              [{ text: "OK" }]
+                              [{ text: "OK" }],
                             );
                           } else {
                             Alert.alert(
                               "Reconnection Failed",
                               "Could not reconnect to the device. Try scanning again.",
-                              [{ text: "OK" }]
+                              [{ text: "OK" }],
                             );
                           }
                         }
                       },
                     },
-                  ]
+                  ],
                 );
               } else {
                 Alert.alert(
                   "Not Connected",
-                  "Device is not currently connected"
+                  "Device is not currently connected",
                 );
               }
             } catch (error) {

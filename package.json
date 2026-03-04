@@ -10,6 +10,7 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
+    "@invertase/react-native-apple-authentication": "^2.5.1",
     "@react-native-async-storage/async-storage": "2.1.2",
     "@react-native-community/datetimepicker": "8.4.1",
     "@react-native-firebase/app": "^23.4.0",
@@ -41,6 +42,7 @@
     "react-native-base64": "^0.2.1",
     "react-native-ble-manager": "^12.1.5",
     "react-native-ble-plx": "^3.5.0",
+    "react-native-gesture-handler": "^2.30.0",
     "react-native-image-picker": "5.0.1",
     "react-native-linear-gradient": "^2.8.3",
     "react-native-maps": "1.20.1",

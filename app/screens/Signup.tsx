@@ -34,6 +34,7 @@ export default function SignupScreen() {
     signInWithPhone,
     confirmPhoneCode,
     signInWithGoogle,
+    signInWithApple,
   } = useAuth();
 
   const role = (route.params as { role?: "user" | "mechanic" })?.role || "user";
@@ -188,8 +189,21 @@ export default function SignupScreen() {
       const { error } = await signInWithGoogle(role);
       if (error) {
         Alert.alert("Error", error.message);
-      } else {
-        navigation.navigate("Home" as never);
+      }
+    } catch (error: any) {
+      Alert.alert("Error", "An unexpected error occurred");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleAuth = async () => {
+    setLoading(true);
+    try {
+      const { error } = await signInWithApple(role);
+      if (error) {
+        Alert.alert("Error", error.message);
       }
     } catch (error: any) {
       Alert.alert("Error", "An unexpected error occurred");
@@ -554,6 +568,35 @@ export default function SignupScreen() {
                   ]}
                 >
                   Google
+                </Text>
+              </View>
+
+              <View style={signupStyles.socialButtonContainer}>
+                <TouchableOpacity
+                  style={[
+                    signupStyles.circularButton,
+                    {
+                      borderWidth: 1,
+                      borderColor: isDark ? colors.gray[600] : colors.gray[300],
+                      backgroundColor: "transparent",
+                    },
+                  ]}
+                  onPress={handleAppleAuth}
+                  activeOpacity={0.7}
+                >
+                  <FontAwesome
+                    name="apple"
+                    size={24}
+                    color={isDark ? colors.gray[400] : colors.gray[600]}
+                  />
+                </TouchableOpacity>
+                <Text
+                  style={[
+                    signupStyles.socialButtonText,
+                    isDark && signupStyles.textLight,
+                  ]}
+                >
+                  Apple
                 </Text>
               </View>
             </View>

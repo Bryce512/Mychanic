@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useLayoutEffect } from "react";
 import {
   View,
   Text,
@@ -13,20 +13,34 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, NavigationProp } from "@react-navigation/native";
 import { RootStackParamList } from "../navigation/AppNavigator";
-import { Feather } from "@expo/vector-icons";
-import Card, { CardHeader, CardContent } from "../components/Card";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Swipeable } from "react-native-gesture-handler";
+import Card, { CardContent } from "../components/Card";
 import SearchBar from "../components/searchBar";
 import UserSearchResults from "../components/UserSearchResults";
 import { colors } from "../theme/colors";
-import { auth, database } from "../../firebaseConfig";
-import firebaseService from "../services/firebaseService";
-import firebase from "@react-native-firebase/app";
+import { auth } from "../../firebaseConfig";
+import firebaseService, {
+  addVehicleOwner,
+  removeVehicleOwner,
+} from "../services/firebaseService";
 
-interface User {
+const maskName = (name: string): string => {
+  const parts = name.trim().split(" ");
+  if (parts.length < 2) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+};
+
+const maskEmail = (email: string): string => {
+  const [local, domain] = email.split("@");
+  if (!domain) return email;
+  return `${local.slice(0, 2)}***@${domain}`;
+};
+
+interface SearchUser {
   id: string;
   email: string;
   firstName: string;
-  // lastName: string;
 }
 
 interface Vehicle {
@@ -35,398 +49,489 @@ interface Vehicle {
   model: string;
   year: string;
   vin?: string;
+  // new format
+  owner?: string;
+  drivers?: string[];
+  driverProfiles?: Record<string, { name: string; maskedEmail: string }>;
+  // legacy
+  ownerId?: string | string[];
 }
 
-export default function ShareVehicle() {
+interface DriverProfile {
+  uid: string;
+  name: string;
+  maskedEmail: string;
+}
+
+const isPrimaryOwner = (vehicle: Vehicle, uid: string): boolean => {
+  if (vehicle.owner) return vehicle.owner === uid;
+  if (Array.isArray(vehicle.ownerId)) return vehicle.ownerId[0] === uid;
+  return vehicle.ownerId === uid;
+};
+
+const getDriverUids = (vehicle: Vehicle): string[] => {
+  if (vehicle.drivers && vehicle.drivers.length > 0) return vehicle.drivers;
+  if (Array.isArray(vehicle.ownerId)) return vehicle.ownerId.slice(1);
+  return [];
+};
+
+export default function ManageDrivers() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
+  const currentUid = auth.currentUser?.uid ?? "";
 
-  const [users, setUsers] = useState<User[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
-  const [searchQuery, setSearchQuery] = useState<string>("");
+  // Step 1 — vehicle list
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [selectedVehicles, setSelectedVehicles] = useState<Set<string>>(
-    new Set()
-  );
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
   const [loadingVehicles, setLoadingVehicles] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sharing, setSharing] = useState(false);
 
-  const searchUsers = async (email: string) => {
-    if (!email.trim()) {
-      setFilteredUsers([]);
-      setError(null);
-      return;
-    }
+  // Step 2 — per-vehicle driver management
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [drivers, setDrivers] = useState<DriverProfile[]>([]);
+  const [removing, setRemoving] = useState<string | null>(null);
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Call the Cloud Function via REST API
-      const response = await fetch(
-        "https://us-central1-fluid-tangent-405719.cloudfunctions.net/searchUsers",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            data: { email },
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.text();
-        console.error("HTTP Error:", response.status, error);
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log("Search result:", result);
-
-      // The response structure from onCall is wrapped in 'result'
-      const data = result.result as { success: boolean; data: User[] };
-
-      if (data.success && data.data) {
-        setFilteredUsers(data.data);
-        if (data.data.length === 0) {
-          setError("No users found with that email");
-        }
-      }
-    } catch (err: any) {
-      console.error("Error searching users:", err);
-      const errorMessage = err.message || "Error searching for users";
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const clearSearch = () => {
-    setFilteredUsers([]);
-    setSearchQuery("");
-    setError(null);
-    setSelectedUser(null);
-  };
-
-  const refreshSearchResults = async () => {
-    // Refresh the current search without clearing the query
-    if (searchQuery.trim()) {
-      await searchUsers(searchQuery);
-    }
-  };
+  // Add driver search
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filteredUsers, setFilteredUsers] = useState<SearchUser[]>([]);
+  const [selectedUser, setSelectedUser] = useState<SearchUser | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
-    loadUserVehicles();
+    loadVehicles();
   }, []);
 
+  // Update the native header whenever the user drills into a vehicle or goes back.
+  useLayoutEffect(() => {
+    if (selectedVehicle) {
+      navigation.setOptions({
+        title: `${selectedVehicle.year} ${selectedVehicle.make} ${selectedVehicle.model}`,
+        headerLeft: () => (
+          <TouchableOpacity
+            onPress={() => setSelectedVehicle(null)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={{ marginLeft: 4 }}
+          >
+            <Feather name="chevron-left" size={28} color={isDark ? colors.white : colors.gray[900]} />
+          </TouchableOpacity>
+        ),
+      });
+    } else {
+      navigation.setOptions({
+        title: "Manage Drivers",
+        headerLeft: undefined,
+      });
+    }
+  }, [selectedVehicle, navigation, isDark]);
+
   useEffect(() => {
-    // Debounce search - only search after user stops typing for 500ms
     const timer = setTimeout(() => {
       if (searchQuery.trim()) {
         searchUsers(searchQuery);
       } else {
         setFilteredUsers([]);
-        setError(null);
+        setSearchError(null);
       }
     }, 500);
-
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const loadUserVehicles = async () => {
-    if (!auth.currentUser?.uid) return;
-
+  const loadVehicles = async () => {
+    if (!currentUid) return;
     setLoadingVehicles(true);
     try {
-      const vehicleList = await firebaseService.getVehicles(
-        auth.currentUser.uid
+      const list = await firebaseService.getVehicles(currentUid);
+      setVehicles(
+        list.map((v: any) => ({
+          id: v.id,
+          make: v.make || "Unknown",
+          model: v.model || "Unknown",
+          year: v.year || "N/A",
+          vin: v.vin,
+          owner: v.owner,
+          drivers: v.drivers,
+          driverProfiles: v.driverProfiles,
+          ownerId: v.ownerId,
+        }))
       );
-
-      const formattedVehicles = vehicleList.map((vehicle: any) => ({
-        id: vehicle.id,
-        make: vehicle.make || "Unknown",
-        model: vehicle.model || "Unknown",
-        year: vehicle.year || "N/A",
-        vin: vehicle.vin,
-      }));
-
-      setVehicles(formattedVehicles);
-    } catch (err) {
-      console.error("Error loading vehicles:", err);
-      Alert.alert("Error", "Failed to load your vehicles");
+    } catch {
+      Alert.alert("Error", "Failed to load vehicles");
     } finally {
       setLoadingVehicles(false);
     }
   };
 
-  const toggleVehicleSelection = (vehicleId: string) => {
-    const newSelected = new Set(selectedVehicles);
-    if (newSelected.has(vehicleId)) {
-      newSelected.delete(vehicleId);
-    } else {
-      newSelected.add(vehicleId);
-    }
-    setSelectedVehicles(newSelected);
+  const selectVehicle = (vehicle: Vehicle) => {
+    if (!isPrimaryOwner(vehicle, currentUid)) return;
+    setSelectedVehicle(vehicle);
+    setSearchQuery("");
+    setFilteredUsers([]);
+    setSelectedUser(null);
+    setSearchError(null);
+
+    // Build driver list from the profiles already stored on the vehicle doc —
+    // no cross-user Firestore reads needed.
+    const driverUids = getDriverUids(vehicle);
+    const profiles: DriverProfile[] = driverUids.map((uid) => ({
+      uid,
+      name: vehicle.driverProfiles?.[uid]?.name ?? "Unknown",
+      maskedEmail: vehicle.driverProfiles?.[uid]?.maskedEmail ?? "",
+    }));
+    setDrivers(profiles);
   };
 
-  const handleSelectUser = (user: User) => {
-    setSelectedUser(user);
-    setSelectedVehicles(new Set());
-  };
-
-  const handleShareVehicles = async () => {
-    if (!selectedUser || selectedVehicles.size === 0) {
-      Alert.alert("Error", "Please select a user and at least one vehicle");
-      return;
-    }
-
-    setSharing(true);
-    try {
-      const currentUserId = auth.currentUser?.uid;
-      if (!currentUserId) return;
-
-      for (const vehicleId of selectedVehicles) {
-        await database
-          .ref(
-            `users/${currentUserId}/vehicles/${vehicleId}/owners/${selectedUser.id}`
-          )
-          .set({
-            id: selectedUser.id,
-            email: selectedUser.email,
-            firstName: selectedUser.firstName,
-            // lastName: selectedUser.lastName,
-          });
-      }
-
-      Alert.alert(
-        "Success",
-        `Vehicle(s) shared with ${selectedUser.firstName}!`
-      );
-      setSelectedUser(null);
-      setSelectedVehicles(new Set());
-      setFilteredUsers([]);
-    } catch (err) {
-      console.error("Error sharing vehicles:", err);
-      Alert.alert("Error", "Failed to share vehicles");
-    } finally {
-      setSharing(false);
-    }
-  };
-
-  const renderVehicleCard = (vehicle: Vehicle) => {
-    const isSelected = selectedVehicles.has(vehicle.id);
-
-    return (
-      <TouchableOpacity
-        key={vehicle.id}
-        style={styles.vehicleCardTouchable}
-        onPress={() => toggleVehicleSelection(vehicle.id)}
-        activeOpacity={0.7}
-      >
-        <Card
-          style={
-            isSelected
-              ? { borderWidth: 2, borderColor: colors.primary[500] }
-              : undefined
+  const handleRemoveDriver = (driverUid: string, driverName: string) => {
+    if (!selectedVehicle) return;
+    Alert.alert("Remove Driver", `Remove ${driverName} from this vehicle?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: async () => {
+          setRemoving(driverUid);
+          try {
+            await removeVehicleOwner(selectedVehicle.id, driverUid);
+            setDrivers((prev) => prev.filter((d) => d.uid !== driverUid));
+          } catch {
+            Alert.alert("Error", "Failed to remove driver");
+          } finally {
+            setRemoving(null);
           }
-        >
-          <CardContent>
-            <View style={styles.vehicleRow}>
-              <View style={styles.vehicleInfo}>
-                <Text
-                  style={[
-                    styles.vehicleName,
-                    { color: isDark ? colors.white : colors.gray[900] },
-                  ]}
-                >
-                  {vehicle.year} {vehicle.make} {vehicle.model}
-                </Text>
-                {vehicle.vin && (
-                  <Text
-                    style={[
-                      styles.vehicleVin,
-                      { color: isDark ? colors.gray[400] : colors.gray[600] },
-                    ]}
-                  >
-                    VIN: {vehicle.vin}
-                  </Text>
-                )}
-              </View>
-              <Feather
-                name={isSelected ? "check-square" : "square"}
-                size={24}
-                color={isSelected ? colors.primary[500] : colors.gray[400]}
-              />
-            </View>
-          </CardContent>
-        </Card>
-      </TouchableOpacity>
+        },
+      },
+    ]);
+  };
+
+  const handleLeaveVehicle = (vehicle: Vehicle) => {
+    Alert.alert(
+      "Leave Vehicle",
+      `Remove yourself from ${vehicle.year} ${vehicle.make} ${vehicle.model}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Leave",
+          style: "destructive",
+          onPress: async () => {
+            setRemoving(vehicle.id);
+            try {
+              await removeVehicleOwner(vehicle.id, currentUid);
+              setVehicles((prev) => prev.filter((v) => v.id !== vehicle.id));
+            } catch {
+              Alert.alert("Error", "Failed to leave vehicle");
+            } finally {
+              setRemoving(null);
+            }
+          },
+        },
+      ]
     );
   };
 
-  if ((loading && filteredUsers.length === 0) || loadingVehicles) {
+  const searchUsers = async (email: string) => {
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const response = await fetch(
+        "https://us-central1-fluid-tangent-405719.cloudfunctions.net/searchUsers",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: { email } }),
+        }
+      );
+      if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+      const result = await response.json();
+      const data = result.result as { success: boolean; data: SearchUser[] };
+      if (data.success && data.data) {
+        setFilteredUsers(data.data);
+        if (data.data.length === 0)
+          setSearchError("No users found with that email");
+      }
+    } catch (err: any) {
+      setSearchError(err.message || "Error searching for users");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleAddDriver = async () => {
+    if (!selectedVehicle || !selectedUser) return;
+    setAdding(true);
+    try {
+      const driverInfo = {
+        name: maskName(selectedUser.firstName),
+        maskedEmail: maskEmail(selectedUser.email),
+      };
+      await addVehicleOwner(selectedVehicle.id, selectedUser.id, driverInfo);
+      const newDriver: DriverProfile = { uid: selectedUser.id, ...driverInfo };
+      setDrivers((prev) => [...prev, newDriver]);
+      setSearchQuery("");
+      setFilteredUsers([]);
+      setSelectedUser(null);
+      Alert.alert("Success", `${driverInfo.name} added as a driver`);
+    } catch {
+      Alert.alert("Error", "Failed to add driver");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const bg = isDark ? colors.gray[900] : colors.gray[50];
+  const textColor = isDark ? colors.white : colors.gray[900];
+  const subTextColor = isDark ? colors.gray[400] : colors.gray[600];
+
+  const ownedVehicles = vehicles.filter((v) => isPrimaryOwner(v, currentUid));
+  const sharedVehicles = vehicles.filter(
+    (v) => !isPrimaryOwner(v, currentUid)
+  );
+
+  // ── Step 2: per-vehicle detail ────────────────────────────────────────
+  if (selectedVehicle) {
     return (
       <SafeAreaView
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: isDark ? colors.gray[900] : colors.gray[50] },
-        ]}
+        style={[styles.container, { backgroundColor: bg }]}
         edges={["bottom", "left", "right"]}
       >
         <StatusBar
           barStyle={isDark ? "light-content" : "dark-content"}
-          backgroundColor={isDark ? colors.gray[900] : colors.gray[50]}
+          backgroundColor={bg}
         />
-        <ActivityIndicator size="large" color={colors.primary[500]} />
-        <Text
-          style={[
-            styles.loadingText,
-            { color: isDark ? colors.white : colors.gray[900] },
-          ]}
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
         >
-          {loadingVehicles ? "Loading Vehicles..." : "Searching Users..."}
-        </Text>
+          {/* Current drivers */}
+          <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: textColor }]}>
+                  Current Drivers
+                </Text>
+
+                {drivers.length === 0 ? (
+                  <Text style={[styles.emptyText, { color: subTextColor }]}>
+                    No drivers added yet
+                  </Text>
+                ) : (
+                  drivers.map((driver) => (
+                    <Card key={driver.uid} style={{ marginBottom: 4 }}>
+                      <CardContent>
+                        <View style={styles.driverRow}>
+                          <View style={styles.driverInfo}>
+                            <Text
+                              style={[styles.driverName, { color: textColor }]}
+                            >
+                              {driver.name}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.driverEmail,
+                                { color: subTextColor },
+                              ]}
+                            >
+                              {driver.maskedEmail}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() =>
+                              handleRemoveDriver(driver.uid, driver.name)
+                            }
+                            disabled={removing !== null}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            {removing === driver.uid ? (
+                              <ActivityIndicator
+                                size="small"
+                                color={colors.red[500]}
+                              />
+                            ) : (
+                              <Feather
+                                name="minus-circle"
+                                size={22}
+                                color={colors.red[500]}
+                              />
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </View>
+
+              {/* Add driver */}
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: textColor }]}>
+                  Add Driver
+                </Text>
+                <View style={styles.searchContainer}>
+                  <SearchBar
+                    placeholder="Search by email..."
+                    value={searchQuery}
+                    onSearch={setSearchQuery}
+                    onClear={() => {
+                      setSearchQuery("");
+                      setFilteredUsers([]);
+                      setSelectedUser(null);
+                      setSearchError(null);
+                    }}
+                  />
+                </View>
+                <UserSearchResults
+                  filteredUsers={filteredUsers}
+                  selectedUser={selectedUser}
+                  loading={searching}
+                  error={searchError}
+                  onSelectUser={setSelectedUser}
+                />
+                {selectedUser && (
+                  <TouchableOpacity
+                    style={[
+                      styles.actionButton,
+                      { backgroundColor: colors.primary[500] },
+                    ]}
+                    onPress={handleAddDriver}
+                    disabled={adding}
+                  >
+                    {adding ? (
+                      <ActivityIndicator size="small" color={colors.white} />
+                    ) : (
+                      <Text style={styles.actionButtonText}>
+                        Add {selectedUser.firstName} as Driver
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
+  // ── Step 1: vehicle selector ──────────────────────────────────────────
   return (
     <SafeAreaView
-      style={[
-        styles.container,
-        { backgroundColor: isDark ? colors.gray[900] : colors.gray[50] },
-      ]}
+      style={[styles.container, { backgroundColor: bg }]}
       edges={["bottom", "left", "right"]}
     >
       <StatusBar
         barStyle={isDark ? "light-content" : "dark-content"}
-        backgroundColor={isDark ? colors.gray[900] : colors.gray[50]}
+        backgroundColor={bg}
       />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text
-          style={[
-            styles.headerTitle,
-            { color: isDark ? colors.white : colors.gray[900] },
-          ]}
-        >
-          Share Vehicle
-        </Text>
-      </View>
-
-      {/* Content */}
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* User Search Section */}
-        <View style={styles.section}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: isDark ? colors.white : colors.gray[900] },
-            ]}
-          >
-            Select User to Share With
+      {loadingVehicles ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary[500]} />
+          <Text style={[styles.loadingText, { color: textColor }]}>
+            Loading Vehicles...
           </Text>
-          <View style={styles.searchContainer}>
-            <SearchBar
-              placeholder="Search by email..."
-              value={searchQuery}
-              onSearch={setSearchQuery}
-              onClear={clearSearch}
-            />
-          </View>
-
-          {loading && filteredUsers.length > 0 && (
-            <View
-              style={[
-                styles.reloadingContainer,
-                {
-                  backgroundColor: isDark
-                    ? colors.primary[900]
-                    : colors.primary[50],
-                },
-              ]}
-            >
-              <ActivityIndicator size="small" color={colors.primary[500]} />
-              <Text
-                style={[
-                  styles.reloadingText,
-                  { color: isDark ? colors.white : colors.gray[900] },
-                ]}
-              >
-                Updating search...
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {ownedVehicles.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: textColor }]}>
+                Your Vehicles
               </Text>
+              {ownedVehicles.map((vehicle) => (
+                <TouchableOpacity
+                  key={vehicle.id}
+                  onPress={() => selectVehicle(vehicle)}
+                  activeOpacity={0.7}
+                  style={{ marginBottom: 4 }}
+                >
+                  <Card>
+                    <CardContent>
+                      <View style={styles.vehicleRow}>
+                        <View style={styles.vehicleInfo}>
+                          <Text style={[styles.vehicleName, { color: textColor }]}>
+                            {vehicle.year} {vehicle.make} {vehicle.model}
+                          </Text>
+                          {vehicle.vin && (
+                            <Text
+                              style={[styles.vehicleVin, { color: subTextColor }]}
+                            >
+                              VIN: {vehicle.vin}
+                            </Text>
+                          )}
+                        </View>
+                        <Feather
+                          name="chevron-right"
+                          size={20}
+                          color={subTextColor}
+                        />
+                      </View>
+                    </CardContent>
+                  </Card>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
 
-          <UserSearchResults
-            filteredUsers={filteredUsers}
-            selectedUser={selectedUser}
-            loading={loading}
-            error={error}
-            onSelectUser={handleSelectUser}
-          />
-        </View>
+          {sharedVehicles.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: textColor }]}>
+                Shared With You
+              </Text>
+              {sharedVehicles.map((vehicle) => (
+                <Swipeable
+                  key={vehicle.id}
+                  renderRightActions={() => (
+                    <View style={{ marginBottom: 20, justifyContent: "center" }}>
+                      <TouchableOpacity
+                        style={styles.leaveAction}
+                        onPress={() => handleLeaveVehicle(vehicle)}
+                        disabled={removing !== null}
+                      >
+                        {removing === vehicle.id ? (
+                          <ActivityIndicator size="small" color={colors.red[500]} />
+                        ) : (
+                          <MaterialCommunityIcons
+                            name="minus-circle"
+                            size={28}
+                            color={colors.red[500]}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                >
+                  <View style={{ marginBottom: 4 }}>
+                    <Card>
+                      <CardContent>
+                        <View style={styles.vehicleRow}>
+                          <View style={styles.vehicleInfo}>
+                            <Text style={[styles.vehicleName, { color: textColor }]}>
+                              {vehicle.year} {vehicle.make} {vehicle.model}
+                            </Text>
+                            {vehicle.vin && (
+                              <Text
+                                style={[styles.vehicleVin, { color: subTextColor }]}
+                              >
+                                VIN: {vehicle.vin}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                      </CardContent>
+                    </Card>
+                  </View>
+                </Swipeable>
+              ))}
+            </View>
+          )}
 
-        {/* Vehicles Section */}
-        <View style={styles.section}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: isDark ? colors.white : colors.gray[900] },
-            ]}
-          >
-            Select Vehicles to Share
-          </Text>
-          {vehicles.length === 0 ? (
-            <Text
-              style={[
-                styles.emptyText,
-                { color: isDark ? colors.gray[400] : colors.gray[600] },
-              ]}
-            >
+          {ownedVehicles.length === 0 && sharedVehicles.length === 0 && (
+            <Text style={[styles.emptyText, { color: subTextColor }]}>
               No vehicles found
             </Text>
-          ) : (
-            <View style={styles.vehiclesContainer}>
-              {vehicles.map((vehicle) => renderVehicleCard(vehicle))}
-            </View>
           )}
-        </View>
-
-        {/* Share Button */}
-        {selectedUser && selectedVehicles.size > 0 && (
-          <View style={styles.shareButtonContainer}>
-            <TouchableOpacity
-              style={[
-                styles.shareButton,
-                { backgroundColor: colors.primary[500] },
-              ]}
-              onPress={handleShareVehicles}
-              disabled={sharing}
-            >
-              {sharing ? (
-                <ActivityIndicator size="small" color={colors.white} />
-              ) : (
-                <Text style={styles.shareButtonText}>
-                  Share {selectedVehicles.size} Vehicle
-                  {selectedVehicles.size > 1 ? "s" : ""}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -446,122 +551,29 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginTop: 16,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray[200],
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
   },
-  searchContainer: {
-    marginBottom: 16,
+  section: {
+    marginBottom: 28,
   },
-  reloadingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  reloadingText: {
+  sectionTitle: {
     fontSize: 14,
-    fontWeight: "500",
-    marginLeft: 8,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-    minHeight: 300,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 12,
+    color: colors.gray[500],
   },
   emptyText: {
-    fontSize: 18,
-    fontWeight: "600",
-    textAlign: "center",
-    marginTop: 16,
-  },
-  emptySubtext: {
     fontSize: 14,
     textAlign: "center",
     marginTop: 8,
-  },
-  usersContainer: {
-    gap: 12,
-  },
-  userCardTouchable: {
-    marginBottom: 4,
-  },
-  userCard: {
-    marginBottom: 0,
-  },
-  userRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  userInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  userAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  avatarText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: colors.white,
-  },
-  userDetails: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 14,
-    fontWeight: "400",
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  vehiclesContainer: {
-    gap: 0,
-  },
-  vehicleCardTouchable: {
-    marginBottom: 0,
-  },
-  vehicleCard: {
-    marginBottom: 0,
   },
   vehicleRow: {
     flexDirection: "row",
@@ -574,28 +586,47 @@ const styles = StyleSheet.create({
   vehicleName: {
     fontSize: 16,
     fontWeight: "600",
-    marginBottom: 4,
+    marginBottom: 2,
   },
   vehicleVin: {
     fontSize: 13,
-    fontWeight: "400",
   },
-  shareButtonContainer: {
+  driverRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  driverInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  driverName: {
+    fontSize: 15,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  driverEmail: {
+    fontSize: 13,
+  },
+  searchContainer: {
+    marginBottom: 12,
+  },
+  actionButton: {
     marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.gray[200],
-  },
-  shareButton: {
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
-  shareButtonText: {
+  actionButtonText: {
     color: colors.white,
     fontSize: 16,
     fontWeight: "600",
+  },
+  leaveAction: {
+    justifyContent: "center",
+    alignItems: "center",
+    width: 52,
   },
 });
