@@ -670,37 +670,52 @@ export const getVehicles = async (userId: string) => {
   const vehicles: any[] = [];
   const seenIds = new Set<string>();
 
-  const add = (doc: any) => {
-    if (!seenIds.has(doc.id)) {
-      seenIds.add(doc.id);
-      vehicles.push({ id: doc.id, ...doc.data() });
+  console.log(`[getVehicles] querying for userId: "${userId}"`);
+
+  const add = (d: any) => {
+    if (!seenIds.has(d.id)) {
+      seenIds.add(d.id);
+      vehicles.push({ id: d.id, ...d.data() });
     }
   };
 
-  // Primary owner
+  // Primary: fetch via user's vehicleIds array
   try {
-    const ownerSnap = await getDocs(query(collection(db, "vehicles"), where("ownerId", "==", userId)));
-    ownerSnap.forEach(add);
-  } catch { /* rules may reject */ }
+    const userSnap = await getDoc(doc(db, "users", userId));
+    const vehicleIds: string[] = userSnap.data()?.vehicleIds ?? [];
+    console.log(`[getVehicles] vehicleIds on user doc: ${vehicleIds.length}`);
+    await Promise.all(
+      vehicleIds.map(async (vid) => {
+        try {
+          const vSnap = await getDoc(doc(db, "vehicles", vid));
+          if (vSnap.exists()) add(vSnap);
+        } catch (e) { console.warn(`[getVehicles] failed to fetch vehicle ${vid}:`, e); }
+      })
+    );
+  } catch (e) { console.warn("[getVehicles] user doc fetch failed:", e); }
 
-  // Shared driver
+  // Owner: ownerId array-contains
+  try {
+    const ownerSnap = await getDocs(query(collection(db, "vehicles"), where("ownerId", "array-contains", userId)));
+    console.log(`[getVehicles] ownerId array-contains: ${ownerSnap.size} docs`);
+    ownerSnap.forEach(add);
+  } catch (e) { console.warn("[getVehicles] ownerId array-contains query failed:", e); }
+
+  // Shared: drivers array-contains
   try {
     const driversSnap = await getDocs(query(collection(db, "vehicles"), where("drivers", "array-contains", userId)));
+    console.log(`[getVehicles] drivers array-contains: ${driversSnap.size} docs`);
     driversSnap.forEach(add);
-  } catch { /* rules may reject */ }
-
-  // Legacy: ownerId stored as an array
-  try {
-    const legacyArraySnap = await getDocs(query(collection(db, "vehicles"), where("ownerId", "array-contains", userId)));
-    legacyArraySnap.forEach(add);
-  } catch { /* rules may reject */ }
+  } catch (e) { console.warn("[getVehicles] drivers array-contains query failed:", e); }
 
   // Legacy: owner string field
   try {
     const legacyOwnerSnap = await getDocs(query(collection(db, "vehicles"), where("owner", "==", userId)));
+    console.log(`[getVehicles] owner == userId (legacy): ${legacyOwnerSnap.size} docs`);
     legacyOwnerSnap.forEach(add);
-  } catch { /* rules may reject */ }
+  } catch (e) { console.warn("[getVehicles] owner == query failed:", e); }
 
+  console.log(`[getVehicles] total unique vehicles found: ${vehicles.length}`);
   return vehicles;
 };
 
@@ -708,7 +723,7 @@ export const addVehicle = async (userId: string, vehicleData: any) => {
   const db = getFirestore();
   const vehicleWithOwner = {
     ...vehicleData,
-    ownerId: userId,
+    ownerId: [userId],
     drivers: [],
   };
   const vehiclesCol = collection(db, "vehicles");

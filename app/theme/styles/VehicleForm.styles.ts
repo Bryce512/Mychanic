@@ -94,4 +94,76 @@ export const vehicleFormStyles = StyleSheet.create({
     backgroundColor: colors.gray[50],
     color: colors.gray[900],
   },
+  // NHTSA dropdown row (Year + Make side by side)
+  dropdownRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 16,
+  },
+  dropdownGroup: {
+    flex: 1,
+  },
+  dropdownButton: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.gray[300],
+    borderRadius: 6,
+    padding: 10,
+    backgroundColor: colors.gray[50],
+    minHeight: 44,
+  },
+  dropdownButtonText: {
+    fontSize: 16,
+    color: colors.gray[900],
+    flex: 1,
+  },
+  dropdownPlaceholder: {
+    fontSize: 16,
+    color: colors.gray[400],
+    flex: 1,
+  },
+  // Modal overlay and sheet
+  dropdownModal: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  dropdownContent: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    height: "70%",
+    paddingBottom: 24,
+  },
+  dropdownHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[200],
+  },
+  dropdownHeaderText: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: colors.gray[900],
+  },
+  dropdownItem: {
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[100],
+  },
+  dropdownItemText: {
+    fontSize: 16,
+    color: colors.gray[900],
+  },
+  loadingText: {
+    fontSize: 14,
+    color: colors.gray[500],
+    textAlign: "center",
+    marginVertical: 8,
+  },
 });

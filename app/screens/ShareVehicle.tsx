@@ -49,7 +49,7 @@ interface Vehicle {
   model: string;
   year: string;
   vin?: string;
-  ownerId: string;
+  ownerId: string[];
   drivers: string[];
   driverProfiles?: Record<string, { name: string; maskedEmail: string }>;
 }
@@ -61,7 +61,7 @@ interface DriverProfile {
 }
 
 const isPrimaryOwner = (vehicle: Vehicle, uid: string): boolean =>
-  vehicle.ownerId === uid;
+  Array.isArray(vehicle.ownerId) && vehicle.ownerId.includes(uid);
 
 const getDriverUids = (vehicle: Vehicle): string[] =>
   vehicle.drivers ?? [];
