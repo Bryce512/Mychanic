@@ -694,13 +694,6 @@ export const getVehicles = async (userId: string) => {
     );
   } catch (e) { console.warn("[getVehicles] user doc fetch failed:", e); }
 
-  // Owner: ownerId array-contains
-  try {
-    const ownerSnap = await getDocs(query(collection(db, "vehicles"), where("ownerId", "array-contains", userId)));
-    console.log(`[getVehicles] ownerId array-contains: ${ownerSnap.size} docs`);
-    ownerSnap.forEach(add);
-  } catch (e) { console.warn("[getVehicles] ownerId array-contains query failed:", e); }
-
   // Shared: drivers array-contains
   try {
     const driversSnap = await getDocs(query(collection(db, "vehicles"), where("drivers", "array-contains", userId)));
