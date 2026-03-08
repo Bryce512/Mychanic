@@ -42,7 +42,11 @@ target 'Mychanic' do
       '--platform',
       'ios'
     ]
+
+    pod 'RNSquareInAppPayments', :path => '../node_modules/react-native-square-in-app-payments'
+
   end
+
 
   config = use_native_modules!(config_command)
 

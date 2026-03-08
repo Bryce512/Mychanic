@@ -119,7 +119,7 @@ export const updateVehicleDiagInfo = async (
   }
 };
 // Fetch diagInfo for a specific vehicle
-export const getVehicleDiagInfo = async (userId: string, vehicleId: string) => {
+export const getVehicleById = async (userId: string, vehicleId: string) => {
   const database = getDatabase();
   const diagInfoRef = ref(
     database,
@@ -149,7 +149,7 @@ export const updateVehicleDiagInfo = async (
 };
 
 // Fetch diagInfo for a specific vehicle
-export const getVehicleDiagInfo = async (userId: string, vehicleId: string) => {
+export const getVehicleById = async (userId: string, vehicleId: string) => {
   return retryOperation(async () => {
     const db = getFirestore();
     const vehicleDoc = await db.collection('vehicles').doc(vehicleId).get();
@@ -788,7 +788,7 @@ export default {
   ensureUserProfile,
   getUserProfile,
   updateUserProfile,
-  getVehicleDiagInfo,
+  getVehicleById,
   updateVehicleDiagInfo,
   uploadVehicleImage,
 };

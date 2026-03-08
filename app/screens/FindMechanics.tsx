@@ -454,7 +454,7 @@ export default function FindMechanicsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom", "left", "right"]}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       <ScrollView showsVerticalScrollIndicator={true}>
         <View>
           <Text style={[styles.subtitle, isDark && styles.textMutedLight]}>

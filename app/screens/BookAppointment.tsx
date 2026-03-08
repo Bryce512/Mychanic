@@ -46,8 +46,8 @@ export default function BookAppointmentScreen() {
 
   // Mock user vehicles
   const userVehicles = [
-    { id: 1, name: "2018 Toyota Camry", obd: true },
-    { id: 2, name: "2015 Honda Civic", obd: false },
+    { id: 1, nickname: "2018 Toyota Camry", obd: true },
+    { id: 2, nickname: "2015 Honda Civic", obd: false },
   ];
 
   // Mock services
@@ -225,7 +225,7 @@ export default function BookAppointmentScreen() {
                             isDark && styles.textLight,
                           ]}
                         >
-                          {v.name}
+                          {v.nickname}
                         </Text>
                         {v.obd && (
                           <View style={styles.obdBadge}>
@@ -788,8 +788,8 @@ export default function BookAppointmentScreen() {
                       >
                         {vehicle === "new"
                           ? "New Vehicle"
-                          : userVehicles.find((v) => v.id === vehicle)?.name ||
-                            "Selected Vehicle"}
+                          : userVehicles.find((v) => v.id === vehicle)
+                              ?.nickname || "Selected Vehicle"}
                       </Text>
                     </View>
                   </View>

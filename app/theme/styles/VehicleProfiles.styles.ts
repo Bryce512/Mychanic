@@ -127,14 +127,33 @@ export const vehicleProfileStyles = StyleSheet.create({
     color: colors.gray[500],
   },
   progressBarContainer: {
-    height: 4,
+    height: 16,
     backgroundColor: colors.gray[200],
-    borderRadius: 2,
+    borderRadius: 8,
     overflow: "hidden",
+    position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
+  },
+  progressBarContainerDark: {
+    backgroundColor: colors.gray[700],
   },
   progressBar: {
     height: "100%",
-    borderRadius: 2,
+    borderRadius: 12,
+    position: "absolute",
+    left: 0,
+    top: 0,
+  },
+  progressBarText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: colors.white,
+    textAlign: "center",
+  },
+  progressBarTextDark: {
+    color: colors.gray[900],
   },
   progressGood: {
     backgroundColor: colors.green[500],
@@ -324,15 +343,16 @@ export const vehicleProfileStyles = StyleSheet.create({
   },
   diagnosticsCardHeader: {
     paddingBottom: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   diagnosticsTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "500",
     color: colors.gray[900],
   },
   diagnosticsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
     gap: 12,
   },
   diagnosticItem: {
@@ -363,14 +383,27 @@ export const vehicleProfileStyles = StyleSheet.create({
     color: colors.gray[900],
   },
   viewDetailsButton: {
-    marginTop: 16,
     alignSelf: "center",
-    marginBottom: 20
   },
   diagnosticsButtonContainer: {
     marginTop: 16,
     alignItems: "center",
     gap: 12,
+  },
+  progressHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  progressLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.gray[900],
+  },
+  progressText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.gray[900],
   },
   textLight: {
     color: colors.white,

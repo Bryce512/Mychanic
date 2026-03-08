@@ -1,208 +1,96 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
   useColorScheme,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
+  Dimensions,
+  ImageBackground,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
-import { Feather } from "@expo/vector-icons";
-import Button from "../components/Button";
-import { useAuth } from "../contexts/AuthContext";
 import { colors } from "../theme/colors";
+
+const { height, width } = Dimensions.get("window");
 
 export default function LoginScreen() {
   const navigation = useNavigation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
-  const { signIn } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [rotation, setRotation] = useState({ beta: 0 }); // beta is the front-to-back tilt
+  const [pressedSection, setPressedSection] = useState<
+    "user" | "mechanic" | null
+  >(null);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Please enter both email and password");
-      return;
-    }
+  // Calculate flex ratios based on device tilt
+  // When beta is positive (tilted forward), user section gets bigger
+  // When beta is negative (tilted backward), mechanic section gets bigger
+  const tiltFactor = Math.max(-0.5, Math.min(0.5, rotation.beta)); // Clamp between -0.5 and 0.5
+  const userFlex = 2 / 3 + tiltFactor; // Base 2/3, adjust by tilt
+  const mechanicFlex = 1 / 3 - tiltFactor; // Base 1/3, adjust by tilt
 
-    setLoading(true);
-    setErrorMessage(null);
+  const handleUserLogin = () => {
+    setPressedSection("user");
+    // Clear the pressed state after a brief delay to show temporary feedback
+    setTimeout(() => setPressedSection(null), 150);
+    navigation.navigate("Signup" as never, { role: "user" });
+  };
 
-    try {
-      const { error } = await signIn(email, password);
-    } catch (error) {
-      setErrorMessage("An unexpected error occurred");
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
+  const handleMechanicLogin = () => {
+    setPressedSection("mechanic");
+    // Clear the pressed state after a brief delay to show temporary feedback
+    setTimeout(() => setPressedSection(null), 150);
+    navigation.navigate("Signup", { role: "mechanic" });
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom", "left", "right"]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoidingView}
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
+      {/* User Login Section - 3/4 of screen */}
+      <ImageBackground
+        source={require("../../assets/images/UserLogin1.jpg")}
+        style={[styles.userSection, { flex: userFlex }]}
+        resizeMode="cover"
       >
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
-          <View style={styles.logoContainer}>
-            <Feather name="tool" size={40} color={colors.primary[500]} />
-            <Text style={[styles.logoText, isDark && styles.textLight]}>
-              Mychanic
+        <TouchableOpacity
+          style={[
+            styles.userOverlayTouchable,
+            pressedSection === "user" && styles.pressedOverlay,
+          ]}
+          onPress={handleUserLogin}
+          activeOpacity={0.8}
+        >
+          <View style={styles.overlayContent}>
+            <Text style={styles.overlayTitle}>I'm a Vehicle Owner</Text>
+            <Text style={styles.overlaySubtitle}>
+              Create an account to manage your vehicles and find mechanics
             </Text>
           </View>
+        </TouchableOpacity>
+      </ImageBackground>
 
-          <Text style={[styles.title, isDark && styles.textLight]}>
-            Welcome Back
-          </Text>
-          <Text style={[styles.subtitle, isDark && styles.textMutedLight]}>
-            Sign in to your account to continue
-          </Text>
-
-          <View style={styles.form}>
-            {errorMessage ? (
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            ) : null}
-
-            <View style={styles.inputContainer}>
-              <Text style={[styles.inputLabel, isDark && styles.textLight]}>
-                Email
-              </Text>
-              <View style={styles.inputWrapper}>
-                <Feather
-                  name="mail"
-                  size={18}
-                  color={isDark ? colors.gray[400] : colors.gray[500]}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={[
-                    styles.input,
-                    isDark && styles.inputDark,
-                    { paddingLeft: 40 },
-                  ]}
-                  placeholder="Enter your email"
-                  placeholderTextColor={
-                    isDark ? colors.gray[400] : colors.gray[500]
-                  }
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={[styles.inputLabel, isDark && styles.textLight]}>
-                Password
-              </Text>
-              <View style={styles.inputWrapper}>
-                <Feather
-                  name="lock"
-                  size={18}
-                  color={isDark ? colors.gray[400] : colors.gray[500]}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={[
-                    styles.input,
-                    isDark && styles.inputDark,
-                    { paddingLeft: 40, paddingRight: 40 },
-                  ]}
-                  placeholder="Enter your password"
-                  placeholderTextColor={
-                    isDark ? colors.gray[400] : colors.gray[500]
-                  }
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                />
-                <TouchableOpacity
-                  style={styles.passwordToggle}
-                  onPress={() => setShowPassword(!showPassword)}
-                >
-                  <Feather
-                    name={showPassword ? "eye-off" : "eye"}
-                    size={18}
-                    color={isDark ? colors.gray[400] : colors.gray[500]}
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <TouchableOpacity style={styles.forgotPassword}>
-              <Text
-                style={[
-                  styles.forgotPasswordText,
-                  isDark && { color: colors.primary[400] },
-                ]}
-              >
-                Forgot Password?
-              </Text>
-            </TouchableOpacity>
-
-            <Button
-              title="Sign In"
-              onPress={handleLogin}
-              loading={loading}
-              fullWidth
-              style={styles.loginButton}
-            />
-
-            <View style={styles.divider}>
-              <View
-                style={[styles.dividerLine, isDark && styles.dividerLineDark]}
-              />
-              <Text
-                style={[styles.dividerText, isDark && styles.textMutedLight]}
-              >
-                OR
-              </Text>
-              <View
-                style={[styles.dividerLine, isDark && styles.dividerLineDark]}
-              />
-            </View>
-
-            <Button
-              title="Sign In as Mechanic"
-              onPress={() => {}}
-              variant="outline"
-              fullWidth
-              style={styles.mechanicButton}
-            />
-          </View>
-
-          <View style={styles.footer}>
-            <Text style={[styles.footerText, isDark && styles.textMutedLight]}>
-              Don't have an account?
+      {/* Mechanic Login Section - 1/4 of screen */}
+      <ImageBackground
+        source={require("../../assets/images/MechanicLogin.jpg")}
+        style={[styles.mechanicSection, { flex: mechanicFlex }]}
+        resizeMode="cover"
+      >
+        <TouchableOpacity
+          style={[
+            styles.overlayTouchable,
+            pressedSection === "mechanic" && styles.pressedOverlay,
+          ]}
+          onPress={handleMechanicLogin}
+          activeOpacity={0.8}
+        >
+          <View style={styles.overlayContent}>
+            <Text style={styles.overlayTitle}>I'm a Mobile Mechanic</Text>
+            <Text style={styles.overlaySubtitle}>
+              Join our network of trusted mobile mechanics
             </Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate("Signup" as never)}
-            >
-              <Text
-                style={[
-                  styles.signupText,
-                  isDark && { color: colors.primary[400] },
-                ]}
-              >
-                Sign Up
-              </Text>
-            </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </ImageBackground>
     </SafeAreaView>
   );
 }
@@ -211,134 +99,54 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  keyboardAvoidingView: {
+  userSection: {
+    flex: 2 / 3, // 3/4 of the screen
+    width: width,
+    borderBottomColor: colors.white,
+    borderBottomWidth: 1,
+  },
+  mechanicSection: {
+    flex: 1 / 3, // 1/4 of the screen
+    width: width,
+  },
+  overlayTouchable: {
     flex: 1,
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    padding: 20,
     justifyContent: "center",
-  },
-  logoContainer: {
-    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 40,
-    gap: 12,
+    backgroundColor: "rgba(0, 0, 0, 0.6)", // 60% opacity black background
   },
-  logoText: {
+  userOverlayTouchable: {
+    flex: 1,
+    justifyContent: "flex-start",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.6)", // 60% opacity black background
+    paddingTop: "75%", // Position text at 3/4 from the top
+  },
+  pressedOverlay: {
+    backgroundColor: "rgba(255, 255, 255, 0.3)", // Light overlay when pressed
+    borderWidth: 3,
+    borderColor: colors.white,
+  },
+  overlayContent: {
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  overlayTitle: {
     fontSize: 28,
     fontWeight: "bold",
-    color: colors.gray[900],
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
+    color: colors.white,
     textAlign: "center",
-    marginBottom: 8,
-    color: colors.gray[900],
+    textShadowColor: "rgba(0, 0, 0, 0.5)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
-  subtitle: {
+  overlaySubtitle: {
     fontSize: 16,
-    textAlign: "center",
-    marginBottom: 32,
-    color: colors.gray[600],
-  },
-  form: {
-    gap: 20,
-  },
-  inputContainer: {
-    gap: 8,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: colors.gray[900],
-  },
-  inputWrapper: {
-    position: "relative",
-  },
-  inputIcon: {
-    position: "absolute",
-    left: 12,
-    top: 12,
-    zIndex: 1,
-  },
-  input: {
-    height: 44,
-    borderWidth: 1,
-    borderColor: colors.gray[300],
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    backgroundColor: colors.white,
-  },
-  inputDark: {
-    borderColor: colors.gray[700],
-    backgroundColor: colors.gray[800],
     color: colors.white,
-  },
-  passwordToggle: {
-    position: "absolute",
-    right: 12,
-    top: 12,
-    zIndex: 1,
-  },
-  forgotPassword: {
-    alignSelf: "flex-end",
-  },
-  forgotPasswordText: {
-    fontSize: 14,
-    color: colors.primary[500],
-  },
-  loginButton: {
-    marginTop: 8,
-  },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.gray[300],
-  },
-  dividerLineDark: {
-    backgroundColor: colors.gray[700],
-  },
-  dividerText: {
-    paddingHorizontal: 12,
-    fontSize: 14,
-    color: colors.gray[500],
-  },
-  mechanicButton: {
-    marginBottom: 8,
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 32,
-    gap: 4,
-  },
-  footerText: {
-    fontSize: 14,
-    color: colors.gray[600],
-  },
-  signupText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: colors.primary[500],
-  },
-  textLight: {
-    color: colors.white,
-  },
-  textMutedLight: {
-    color: colors.gray[400],
-  },
-  errorText: {
-    color: "red",
-    marginBottom: 15,
     textAlign: "center",
+    opacity: 0.9,
+    textShadowColor: "rgba(0, 0, 0, 0.5)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
 });

@@ -1,5 +1,6 @@
 // Debug: Log all vehicles and their ownerId fields
-import storage from "@react-native-firebase/storage";
+import appleAuth from "@invertase/react-native-apple-authentication";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { initializeApp, getApp, getApps } from "@react-native-firebase/app";
 import {
   getAuth,
@@ -7,6 +8,12 @@ import {
   createUserWithEmailAndPassword,
   signOut as authSignOut,
   onAuthStateChanged,
+  signInWithCredential,
+  GoogleAuthProvider,
+  AppleAuthProvider,
+  PhoneAuthProvider,
+  signInWithPhoneNumber,
+  linkWithCredential,
 } from "@react-native-firebase/auth";
 import {
   getFirestore,
@@ -24,9 +31,10 @@ import {
   arrayRemove,
   documentId,
   getDoc,
+  deleteField,
 } from "@react-native-firebase/firestore";
 import type { FirebaseAuthTypes } from "@react-native-firebase/auth";
-import { auth } from "../../firebaseConfig";
+import storage from "@react-native-firebase/storage";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -85,9 +93,18 @@ export const uploadVehicleImage = async (
   }
 };
 
+export const getJob = async (jobId: string) => {
+  const db = getFirestore();
+  const jobRef = doc(db, "jobs", jobId);
+  const jobSnap = await getDoc(jobRef);
+  if (jobSnap.exists()) {
+    return { id: jobSnap.id, data: jobSnap.data() };
+  }
+  return null;
+};
+
 // Update diagInfo for a specific vehicle
 export const updateVehicleDiagInfo = async (
-  userId: string,
   vehicleId: string,
   diagData: any
 ) => {
@@ -102,13 +119,13 @@ export const updateVehicleDiagInfo = async (
 };
 
 // Fetch diagInfo for a specific vehicle
-export const getVehicleDiagInfo = async (userId: string, vehicleId: string) => {
+export const getVehicleById = async (vehicleId: string) => {
   const db = getFirestore();
   const vehicleRef = doc(db, "vehicles", vehicleId);
   const vehicleSnap = await getDoc(vehicleRef);
   if (vehicleSnap.exists()) {
     const vehicleData = vehicleSnap.data();
-    return vehicleData?.diagnosticData || null;
+    return vehicleData || null;
   }
   return null;
 };
@@ -151,7 +168,10 @@ export const readData = async (userId: string) => {
 };
 
 // Creates a user profile in the database if it doesn't already exist
-export const ensureUserProfile = async (user: FirebaseAuthTypes.User) => {
+export const ensureUserProfile = async (
+  user: FirebaseAuthTypes.User,
+  role: "user" | "mechanic" = "user"
+) => {
   if (!user) return null;
 
   const db = getFirestore();
@@ -163,6 +183,7 @@ export const ensureUserProfile = async (user: FirebaseAuthTypes.User) => {
         name: user.displayName || "",
         email: user.email || "",
         phone: user.phoneNumber || "",
+        role: role,
       },
       vehicleIds: [],
       createdAt: serverTimestamp(),
@@ -219,13 +240,11 @@ export const signIn = async (email: string, password: string) => {
 
     // Use React Native Firebase auth
     const auth = getAuth();
-    console.log("Attempting authentication...");
     const userCredential = await signInWithEmailAndPassword(
       auth,
       email,
       password
     );
-    console.log("Authentication successful, user ID:", userCredential.user.uid);
 
     // Return successful login immediately - don't wait for Firestore operations
     // Firestore operations will happen in background (non-blocking)
@@ -233,10 +252,15 @@ export const signIn = async (email: string, password: string) => {
 
     return { user: userCredential.user, error: null };
   } catch (error: any) {
-    console.error("Firebase authentication error:", error.code, error.message);
-
     let errorMessage = "Failed to sign in";
+    let errorCode = error.code || "auth/unknown";
+
     if (error.code === "auth/user-not-found") {
+      errorMessage = "No account exists with this email";
+    } else if (error.code === "auth/invalid-credential") {
+      // invalid-credential can mean wrong password OR user not found
+      // Treat as user-not-found for new signup flow
+      errorCode = "auth/user-not-found";
       errorMessage = "No account exists with this email";
     } else if (error.code === "auth/wrong-password") {
       errorMessage = "Incorrect password";
@@ -251,7 +275,7 @@ export const signIn = async (email: string, password: string) => {
     return {
       user: null,
       error: {
-        code: error.code || "auth/unknown",
+        code: errorCode,
         message: errorMessage,
         originalError: error,
       },
@@ -259,7 +283,11 @@ export const signIn = async (email: string, password: string) => {
   }
 };
 
-export const signUp = async (email: string, password: string) => {
+export const signUp = async (
+  email: string,
+  password: string,
+  role: "user" | "mechanic" = "user"
+) => {
   try {
     const auth = getAuth();
     const userCredential = await createUserWithEmailAndPassword(
@@ -274,7 +302,7 @@ export const signUp = async (email: string, password: string) => {
     setTimeout(async () => {
       try {
         console.log("Background: Creating user profile...");
-        await ensureUserProfile(userCredential.user);
+        await ensureUserProfile(userCredential.user, role);
         console.log("Background: User profile created successfully");
       } catch (firestoreError: any) {
         console.warn(
@@ -292,9 +320,217 @@ export const signUp = async (email: string, password: string) => {
   }
 };
 
+// Phone Authentication
+export const signInWithPhone = async (
+  phoneNumber: string,
+  role?: "user" | "mechanic"
+) => {
+  try {
+    const auth = getAuth();
+    const confirmation = await signInWithPhoneNumber(auth, phoneNumber);
+    return { confirmation, error: null };
+  } catch (error: any) {
+    console.error("Phone sign in error:", error);
+    return { confirmation: null, error };
+  }
+};
+
+export const confirmPhoneCode = async (
+  confirmation: any,
+  verificationCode: string,
+  role: "user" | "mechanic" = "user"
+) => {
+  try {
+    const userCredential = await confirmation.confirm(verificationCode);
+
+    // Create user profile in background (non-blocking)
+    setTimeout(async () => {
+      try {
+        console.log("Background: Creating user profile for phone auth...");
+        await ensureUserProfile(userCredential.user, role);
+        console.log(
+          "Background: User profile created successfully for phone auth"
+        );
+      } catch (firestoreError: any) {
+        console.warn(
+          "Background: Could not create user profile for phone auth:",
+          firestoreError.code
+        );
+      }
+    }, 100);
+
+    return { user: userCredential.user, error: null };
+  } catch (error: any) {
+    console.error("Phone verification error:", error);
+    return { user: null, error };
+  }
+};
+
+// Google Authentication
+export const signInWithGoogle = async (role?: "user" | "mechanic") => {
+  try {
+    // Configure Google Sign-In
+    GoogleSignin.configure({
+      webClientId:
+        "578434461817-994bl7g0rqsqljs8e29cncfulv70ej6c.apps.googleusercontent.com",
+    });
+
+    // Check if device has Google Play Services
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+    // Sign in with Google
+    const userInfo = await GoogleSignin.signIn();
+
+    // Create a Google credential with the token
+    const googleCredential = GoogleAuthProvider.credential(
+      userInfo.data?.idToken
+    );
+
+    // Sign in with Firebase
+    const auth = getAuth();
+    const userCredential = await signInWithCredential(auth, googleCredential);
+
+    // Create user profile in background (non-blocking)
+    setTimeout(async () => {
+      try {
+        console.log("Background: Creating user profile for Google auth...");
+        await ensureUserProfile(userCredential.user, role);
+        console.log(
+          "Background: User profile created successfully for Google auth"
+        );
+      } catch (firestoreError: any) {
+        console.warn(
+          "Background: Could not create user profile for Google auth:",
+          firestoreError.code
+        );
+      }
+    }, 100);
+
+    return { user: userCredential.user, error: null };
+  } catch (error: any) {
+    console.error("Google sign in error:", error);
+    let errorMessage = "Failed to sign in with Google";
+    if (error.code === "auth/account-exists-with-different-credential") {
+      errorMessage = "Account exists with different sign-in method";
+    } else if (error.code === "auth/invalid-credential") {
+      errorMessage = "Invalid Google credential";
+    } else if (error.code === "auth/operation-not-allowed") {
+      errorMessage = "Google sign-in is not enabled";
+    }
+
+    return {
+      user: null,
+      error: {
+        code: error.code || "auth/google-signin-error",
+        message: errorMessage,
+        originalError: error,
+      },
+    };
+  }
+};
+
+// Apple Authentication
+export const signInWithApple = async (role?: "user" | "mechanic") => {
+  try {
+    const appleAuthRequestResponse = await appleAuth.performRequest({
+      requestedOperation: appleAuth.Operation.LOGIN,
+      requestedScopes: [appleAuth.Scope.EMAIL, appleAuth.Scope.FULL_NAME],
+    });
+
+    const { identityToken, nonce } = appleAuthRequestResponse;
+
+    if (!identityToken) {
+      return {
+        user: null,
+        error: {
+          code: "auth/apple-signin-error",
+          message: "Apple Sign-In failed - no identity token returned",
+        },
+      };
+    }
+
+    const appleCredential = AppleAuthProvider.credential(identityToken, nonce);
+    const auth = getAuth();
+    const userCredential = await signInWithCredential(auth, appleCredential);
+
+    // Create user profile in background (non-blocking)
+    setTimeout(async () => {
+      try {
+        await ensureUserProfile(userCredential.user, role);
+      } catch (firestoreError: any) {
+        console.warn(
+          "Background: Could not create user profile for Apple auth:",
+          firestoreError.code
+        );
+      }
+    }, 100);
+
+    return { user: userCredential.user, error: null };
+  } catch (error: any) {
+    console.error("Apple sign in error:", error);
+    if (error.code === "1001") {
+      return { user: null, error: null };
+    }
+    return {
+      user: null,
+      error: {
+        code: error.code || "auth/apple-signin-error",
+        message: "Failed to sign in with Apple",
+        originalError: error,
+      },
+    };
+  }
+};
+
 export const signOut = async () => {
   const auth = getAuth();
   return authSignOut(auth);
+};
+
+export const deleteAccount = async (userId: string) => {
+  try {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      throw new Error("No authenticated user found");
+    }
+
+    // Delete user profile from Firestore, but keep vehicles intact
+    const db = getFirestore();
+    const userRef = doc(db, "users", userId);
+
+    // Delete the user profile document
+    await deleteDoc(userRef);
+
+    console.log("User profile deleted from Firestore");
+
+    // Then delete the authentication user
+    await currentUser.delete();
+
+    console.log("User authentication deleted");
+
+    return { success: true, error: null };
+  } catch (error: any) {
+    console.error("Account deletion error:", error);
+    let errorMessage = "Failed to delete account";
+
+    if (error.code === "auth/requires-recent-login") {
+      errorMessage =
+        "Please log out and log back in before deleting your account";
+    } else if (error.code === "auth/user-not-found") {
+      errorMessage = "User account not found";
+    }
+
+    return {
+      success: false,
+      error: {
+        code: error.code || "auth/unknown",
+        message: errorMessage,
+        originalError: error,
+      },
+    };
+  }
 };
 
 export const getCurrentUser = () => {
@@ -310,21 +546,43 @@ export const onAuthChange = (
 };
 
 export const getUserProfile = async (userId: string) => {
-  console.log("📋 Getting user profile for:", userId);
   try {
     const db = getFirestore();
     const userRef = doc(db, "users", userId);
     const userSnap = await getDoc(userRef);
     if (userSnap.exists()) {
       const userData = userSnap.data();
-      console.log("📋 User profile found:", userData?.profile);
       return userData?.profile || null;
     } else {
-      console.log("📋 No user profile found in Firestore");
       return null;
     }
   } catch (error: any) {
     console.error("📋 getUserProfile error:", {
+      code: error.code,
+      message: error.message,
+      stack: error.stack,
+    });
+    throw error;
+  }
+};
+
+export const updateUserProfile = async (userId: string, profileData: any) => {
+  try {
+    const db = getFirestore();
+    const userRef = doc(db, "users", userId);
+
+    // Update only the profile fields within the profile object
+    await updateDoc(userRef, {
+      profile: {
+        ...profileData,
+      },
+      updatedAt: serverTimestamp(),
+    });
+
+    console.log("User profile updated successfully");
+    return true;
+  } catch (error: any) {
+    console.error("📋 updateUserProfile error:", {
       code: error.code,
       message: error.message,
       stack: error.stack,
@@ -351,20 +609,20 @@ export const debugFirestoreData = async (userId: string) => {
 
     console.log("🔍 Testing basic Firestore connectivity...");
     try {
-      const testRef = defaultDb.collection("test").doc("connectivity");
+      const testRef = doc(db, "test", "connectivity");
       console.log("🔍 Created test reference successfully");
 
-      await testRef.set({
+      await setDoc(testRef, {
         timestamp: new Date().toISOString(),
         test: true,
         userId: userId,
       });
       console.log("🔍 Firestore write test successful");
 
-      const testSnap = await testRef.get();
+      const testSnap = await getDoc(testRef);
       console.log("🔍 Firestore read test successful:", testSnap.data());
 
-      await testRef.delete();
+      await deleteDoc(testRef);
       console.log("🔍 Firestore delete test successful");
     } catch (connectivityError: any) {
       console.error(
@@ -377,8 +635,8 @@ export const debugFirestoreData = async (userId: string) => {
 
     console.log("🔍 Checking users collection in default database...");
     try {
-      const defaultUserRef = defaultDb.collection("users").doc(userId);
-      const defaultUserSnap = await defaultUserRef.get();
+      const defaultUserRef = doc(db, "users", userId);
+      const defaultUserSnap = await getDoc(defaultUserRef);
       console.log("🔍 Default DB user exists:", defaultUserSnap.exists());
       if (defaultUserSnap.exists()) {
         console.log("🔍 Default DB user data:", defaultUserSnap.data());
@@ -389,12 +647,13 @@ export const debugFirestoreData = async (userId: string) => {
 
     console.log("🔍 Checking vehicles collection in default database...");
     try {
-      const defaultVehiclesRef = defaultDb
-        .collection("vehicles")
-        .where("userId", "==", userId);
-      const defaultVehiclesSnap = await defaultVehiclesRef.get();
+      const vehiclesQuery = query(
+        collection(db, "vehicles"),
+        where("ownerId", "array-contains", userId)
+      );
+      const defaultVehiclesSnap = await getDocs(vehiclesQuery);
       console.log("🔍 Default DB vehicles count:", defaultVehiclesSnap.size);
-      defaultVehiclesSnap.forEach((doc) => {
+      defaultVehiclesSnap.forEach((doc: any) => {
         console.log("🔍 Default DB vehicle:", doc.id, doc.data());
       });
     } catch (error) {
@@ -407,20 +666,41 @@ export const debugFirestoreData = async (userId: string) => {
 
 // Vehicle-specific functions
 export const getVehicles = async (userId: string) => {
-  console.log("running getVehicles for user:", userId);
   const db = getFirestore();
-  console.log("🚗 Querying vehicles from Firestore...");
-  const q = query(collection(db, "vehicles"), where("ownerId", "==", userId));
-  const vehiclesSnapshot = await getDocs(q);
-
   const vehicles: any[] = [];
-  vehiclesSnapshot.forEach((doc: any) => {
-    const data = doc.data();
-    // Optionally filter by ownerId here if needed:
-    // if (data.ownerId === userId) {
-    vehicles.push({ id: doc.id, ...data });
-    // }
-  });
+  const seenIds = new Set<string>();
+
+  const add = (doc: any) => {
+    if (!seenIds.has(doc.id)) {
+      seenIds.add(doc.id);
+      vehicles.push({ id: doc.id, ...doc.data() });
+    }
+  };
+
+  // New format: owner field (primary owner)
+  try {
+    const ownerSnap = await getDocs(query(collection(db, "vehicles"), where("owner", "==", userId)));
+    ownerSnap.forEach(add);
+  } catch { /* rules may reject */ }
+
+  // New format: drivers array (shared access)
+  try {
+    const driversSnap = await getDocs(query(collection(db, "vehicles"), where("drivers", "array-contains", userId)));
+    driversSnap.forEach(add);
+  } catch { /* rules may reject */ }
+
+  // Legacy: ownerId stored as an array
+  try {
+    const legacyArraySnap = await getDocs(query(collection(db, "vehicles"), where("ownerId", "array-contains", userId)));
+    legacyArraySnap.forEach(add);
+  } catch { /* rules may reject */ }
+
+  // Legacy: ownerId stored as a plain string
+  try {
+    const legacyStringSnap = await getDocs(query(collection(db, "vehicles"), where("ownerId", "==", userId)));
+    legacyStringSnap.forEach(add);
+  } catch { /* rules may reject */ }
+
   return vehicles;
 };
 
@@ -428,7 +708,8 @@ export const addVehicle = async (userId: string, vehicleData: any) => {
   const db = getFirestore();
   const vehicleWithOwner = {
     ...vehicleData,
-    ownerId: userId,
+    owner: userId,
+    drivers: [],
   };
   const vehiclesCol = collection(db, "vehicles");
   const docRef = await addDoc(vehiclesCol, vehicleWithOwner);
@@ -437,11 +718,7 @@ export const addVehicle = async (userId: string, vehicleData: any) => {
   return { id: docRef.id };
 };
 
-export const updateVehicle = async (
-  userId: string,
-  vehicleId: string,
-  vehicleData: any
-) => {
+export const updateVehicle = async (vehicleId: string, vehicleData: any) => {
   const db = getFirestore();
   const vehicleRef = doc(db, "vehicles", vehicleId);
   await updateDoc(vehicleRef, vehicleData);
@@ -454,6 +731,50 @@ export const deleteVehicle = async (userId: string, vehicleId: string) => {
   await deleteDoc(vehicleRef);
   const userRef = doc(db, "users", userId);
   await updateDoc(userRef, { vehicleIds: arrayRemove(vehicleId) });
+  return true;
+};
+
+// Add a driver to a vehicle. Stores masked display info so no cross-user
+// reads are needed when listing drivers.
+export const addVehicleOwner = async (
+  vehicleId: string,
+  newOwnerId: string,
+  driverInfo: { name: string; maskedEmail: string }
+) => {
+  const db = getFirestore();
+  const vehicleRef = doc(db, "vehicles", vehicleId);
+  await updateDoc(vehicleRef, {
+    drivers: arrayUnion(newOwnerId),
+    [`driverProfiles.${newOwnerId}`]: driverInfo,
+  });
+  return true;
+};
+
+// Remove a driver from a vehicle and delete their stored display info.
+export const removeVehicleOwner = async (
+  vehicleId: string,
+  driverUid: string
+) => {
+  const db = getFirestore();
+  const vehicleRef = doc(db, "vehicles", vehicleId);
+
+  // Remove from both new (drivers) and legacy (ownerId) array formats.
+  // arrayRemove on a non-existent field is a safe no-op.
+  await updateDoc(vehicleRef, {
+    drivers: arrayRemove(driverUid),
+    ownerId: arrayRemove(driverUid),
+  });
+
+  // Delete the stored display profile separately — dynamic key + deleteField()
+  // in a combined updateDoc can fail on react-native-firebase.
+  try {
+    await updateDoc(vehicleRef, {
+      [`driverProfiles.${driverUid}`]: deleteField(),
+    });
+  } catch {
+    // Non-critical — just display metadata cleanup.
+  }
+
   return true;
 };
 
@@ -473,15 +794,112 @@ export const getDiagnosticLogs = async (userId: string, vehicleId: string) => {
   return logs;
 };
 
-export const updateUserProfile = async (userId: string, profileData: any) => {
+export const updateUserAddress = async (
+  userId: string,
+  addressType: "homeAddress" | "workAddress",
+  address: string
+) => {
   const db = getFirestore();
   const userRef = doc(db, "users", userId);
   await updateDoc(userRef, {
-    profile: profileData,
+    [`profile.${addressType}`]: address,
     updatedAt: serverTimestamp(),
   });
-  console.log("User profile updated successfully");
+  console.log(`User ${addressType} updated successfully`);
   return true;
+};
+
+export const getJobsList = async () => {
+  const db = getFirestore();
+  const jobsCol = collection(db, "jobs");
+  const jobsQuery = query(jobsCol, where("status", "==", "available"));
+  const jobsSnapshot = await getDocs(jobsQuery);
+  const jobs = jobsSnapshot.docs.map((doc: any) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+  return jobs;
+};
+
+export const claimJob = async (
+  jobId: string,
+  mechanicId: string | undefined
+) => {
+  if (!mechanicId) {
+    throw new Error("Mechanic ID is required to claim a job");
+  }
+
+  const db = getFirestore();
+  const jobRef = doc(db, "jobs", jobId);
+  await updateDoc(jobRef, {
+    status: "claimed",
+    mechanicId: mechanicId,
+    claimedAt: serverTimestamp(),
+  });
+  console.log(`Job ${jobId} claimed by mechanic ${mechanicId}`);
+  return true;
+};
+
+export const getMyJobs = async (mechanicId: string) => {
+  const jobsCol = collection(db, "jobs");
+  const jobsQuery = query(jobsCol, where("mechanicId", "==", mechanicId));
+  const jobsSnapshot = await getDocs(jobsQuery);
+  const jobs = jobsSnapshot.docs.map((doc: any) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+  console.log(`Fetched ${jobs.length} jobs for mechanic ${mechanicId}`);
+  return jobs;
+};
+
+export const releaseJob = async (jobId: string) => {
+  const db = getFirestore();
+  const jobRef = doc(db, "jobs", jobId);
+  await updateDoc(jobRef, {
+    status: "available",
+    mechanicId: null,
+    claimedAt: null,
+  });
+  console.log(`Job ${jobId} released back to available`);
+  return true;
+};
+
+export const createJob = async (jobData: any) => {
+  const db = getFirestore();
+  const jobsCol = collection(db, "jobs");
+  const docRef = await addDoc(jobsCol, {
+    ...jobData,
+    createdAt: serverTimestamp(),
+  });
+  console.log(`Job created with ID: ${docRef.id}`);
+  return { id: docRef.id };
+};
+
+export const updateJobStatus = async (
+  jobId: string,
+  newStatus: "available" | "claimed" | "in_progress" | "completed"
+) => {
+  const db = getFirestore();
+  const jobRef = doc(db, "jobs", jobId);
+
+  const updateData: any = {
+    status: newStatus,
+    updatedAt: serverTimestamp(),
+  };
+
+  // When marking a job as available, clear mechanic assignment
+  if (newStatus === "available") {
+    updateData.mechanicId = null;
+    updateData.claimedAt = null;
+  }
+
+  await updateDoc(jobRef, updateData);
+  console.log(`Job ${jobId} status updated to ${newStatus}`);
+  return true;
+};
+
+export const addCarOwner = async  (email: String) => {
+  // TODO
 };
 
 export default {
@@ -490,20 +908,35 @@ export default {
   writeData,
   signIn,
   signUp,
+  signInWithPhone,
+  confirmPhoneCode,
+  signInWithGoogle,
+  signInWithApple,
   signOut,
   getCurrentUser,
+  getJob,
   onAuthChange,
   getVehicles,
   addVehicle,
   updateVehicle,
   deleteVehicle,
+  addVehicleOwner,
+  removeVehicleOwner,
   getDiagnosticLogs,
   ensureUserProfile,
   getUserProfile,
-  updateUserProfile,
-  getVehicleDiagInfo,
+  updateUserAddress,
+  getVehicleById,
   updateVehicleDiagInfo,
   uploadVehicleImage,
   retryUserProfileCreation,
   debugFirestoreData,
+  getJobsList,
+  getMyJobs,
+  claimJob,
+  releaseJob,
+  createJob,
+  updateJobStatus,
+  updateUserProfile,
+  addCarOwner
 };

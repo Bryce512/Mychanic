@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,25 +11,109 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { useTheme } from "../components/theme-provider";
-import Button from "../components/Button";
 import Card from "../components/Card";
 import { RootStackParamList } from "../navigation/AppNavigator";
+import firebaseService from "../services/firebaseService";
+import { auth } from "../../firebaseConfig";
+import { Job } from "../../types";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+interface MechanicStats {
+  todaysJobs: number;
+  thisWeekJobs: number;
+  averageRating: number;
+}
 
 export default function MechanicDashboard() {
   const { colors, isDark } = useTheme();
   const navigation = useNavigation<NavigationProp>();
 
+  const [stats, setStats] = useState<MechanicStats>({
+    todaysJobs: 0,
+    thisWeekJobs: 0,
+    averageRating: 0,
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  // Calculate stats from jobs data
+  const calculateStats = (jobs: Job[]): MechanicStats => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
+
+    let todaysJobs = 0;
+    let thisWeekJobs = 0;
+    let totalRating = 0;
+    let ratingCount = 0;
+
+    jobs.forEach((job) => {
+      if (job.claimedAt) {
+        const claimedDate = job.claimedAt.toDate
+          ? job.claimedAt.toDate()
+          : new Date(job.claimedAt);
+
+        // Count today's jobs
+        if (claimedDate >= today) {
+          todaysJobs++;
+        }
+
+        // Count this week's jobs
+        if (claimedDate >= weekStart) {
+          thisWeekJobs++;
+        }
+
+        // Calculate average rating (only include jobs with ratings)
+        // Note: This assumes jobs have a 'rating' field. If not, this will need to be updated
+        // to fetch ratings from a separate reviews collection
+        if (job.rating && typeof job.rating === "number") {
+          totalRating += job.rating;
+          ratingCount++;
+        }
+      }
+    });
+
+    const averageRating =
+      ratingCount > 0 ? Math.round((totalRating / ratingCount) * 10) / 10 : 0;
+
+    return {
+      todaysJobs,
+      thisWeekJobs,
+      averageRating,
+    };
+  };
+
+  // Load mechanic's jobs and calculate stats
+  const loadStats = async () => {
+    try {
+      setLoadingStats(true);
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+
+      const jobs = await firebaseService.getMyJobs(currentUser.uid);
+      const calculatedStats = calculateStats(jobs);
+      setStats(calculatedStats);
+    } catch (error) {
+      console.error("Error loading mechanic stats:", error);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
   const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: isDark ? colors.gray[900] : colors.gray[50],
-      paddingTop: 0,
+      paddingTop: 8,
     },
     content: {
       flex: 1,
-      padding: 0,
+      padding: 8,
     },
     statsContainer: {
       flexDirection: "row",
@@ -140,6 +224,20 @@ export default function MechanicDashboard() {
 
   const quickActions = [
     {
+      id: "myJobs",
+      title: "My Jobs",
+      description: "View your claimed jobs",
+      icon: "briefcase",
+      onPress: () => navigation.navigate("JobsList", { isMyJobs: true }),
+    },
+    {
+      id: "JobsList",
+      title: "Available Jobs",
+      description: "Browse and claim new jobs",
+      icon: "briefcase",
+      onPress: () => navigation.navigate("JobsList", { isMyJobs: false }),
+    },
+    {
       id: "diagnostic",
       title: "Diagnostic Assistant",
       description: "AI-powered diagnostic guidance",
@@ -160,7 +258,7 @@ export default function MechanicDashboard() {
       icon: "calendar",
       onPress: () => {
         // TODO: Navigate to appointments screen when available
-        console.log("Navigate to appointments");
+        alert("Appointments screen coming soon!");
       },
     },
     {
@@ -172,45 +270,27 @@ export default function MechanicDashboard() {
     },
   ];
 
-  const recentActivities = [
-    {
-      id: 1,
-      title: "Diagnostic completed",
-      description: "Engine misfire analysis for 2018 Toyota Camry",
-      time: "2 hours ago",
-      icon: "check-circle",
-    },
-    {
-      id: 2,
-      title: "Device connected",
-      description: "OBDII scanner paired successfully",
-      time: "4 hours ago",
-      icon: "bluetooth",
-    },
-    {
-      id: 3,
-      title: "New appointment",
-      description: "Brake inspection scheduled for tomorrow",
-      time: "1 day ago",
-      icon: "calendar",
-    },
-  ];
-
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["bottom", "left", "right"]}>
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Stats Overview */}
         <View style={styles.statsContainer}>
           <Card style={styles.statCard}>
-            <Text style={styles.statNumber}>6</Text>
+            <Text style={styles.statNumber}>
+              {loadingStats ? "..." : stats.todaysJobs}
+            </Text>
             <Text style={styles.statLabel}>Today's Jobs</Text>
           </Card>
           <Card style={styles.statCard}>
-            <Text style={styles.statNumber}>24</Text>
+            <Text style={styles.statNumber}>
+              {loadingStats ? "..." : stats.thisWeekJobs}
+            </Text>
             <Text style={styles.statLabel}>This Week</Text>
           </Card>
           <Card style={styles.statCard}>
-            <Text style={styles.statNumber}>4.8</Text>
+            <Text style={styles.statNumber}>
+              {loadingStats ? "..." : stats.averageRating.toFixed(1)}
+            </Text>
             <Text style={styles.statLabel}>Rating</Text>
           </Card>
         </View>
@@ -239,27 +319,28 @@ export default function MechanicDashboard() {
             </TouchableOpacity>
           ))}
         </View>
-
-        {/* Recent Activity */}
-        <Text style={styles.recentActivityTitle}>Recent Activity</Text>
-        {recentActivities.map((activity) => (
-          <View key={activity.id} style={styles.activityItem}>
-            <View style={styles.activityIcon}>
-              <Feather
-                name={activity.icon as any}
-                size={20}
-                color={colors.white}
-              />
-            </View>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>{activity.title}</Text>
-              <Text style={styles.activityDescription}>
-                {activity.description}
-              </Text>
-            </View>
-            <Text style={styles.activityTime}>{activity.time}</Text>
-          </View>
-        ))}
+        <TouchableOpacity
+          style={{
+            backgroundColor: colors.primary[500],
+            padding: 12,
+            borderRadius: 8,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 12,
+          }}
+          onPress={() => navigation.navigate("Feedback" as never)}
+        >
+          <Feather
+            name="message-square"
+            size={18}
+            color="white"
+            style={{ marginRight: 8 }}
+          />
+          <Text style={{ color: "white", fontWeight: "bold" }}>
+            Send Feedback
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );

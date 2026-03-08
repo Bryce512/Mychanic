@@ -15,6 +15,20 @@ export interface PlaceResult {
   distance?: number;
 }
 
+export interface GeocodeResult {
+  latitude: number;
+  longitude: number;
+  formattedAddress: string;
+  placeId?: string;
+}
+
+export interface AddressSuggestion {
+  placeId: string;
+  displayName: string;
+  latitude: number;
+  longitude: number;
+}
+
 // Note: You'll need to add your Google Places API key here
 const GOOGLE_PLACES_API_KEY = "AIzaSyDH_5rYB8ja6e6xtjZ5hmmN7NosXNEpeI8"; // Replace with your actual API key
 
@@ -354,6 +368,121 @@ export class PlacesService {
       console.error("Error searching mechanics:", error);
       return [];
     }
+  }
+
+  // Validate and geocode an address to ensure it can be used for mechanic services
+  static async validateAndGeocodeAddress(
+    address: string
+  ): Promise<GeocodeResult | null> {
+    try {
+      // If API key is not working, return mock validation for development
+      if (
+        USE_MOCK_DATA_FALLBACK ||
+        !GOOGLE_PLACES_API_KEY ||
+        GOOGLE_PLACES_API_KEY.includes("YOUR_")
+      ) {
+        console.log("Using mock geocoding validation");
+        return this.mockGeocodeAddress(address);
+      }
+
+      // Use Google Geocoding API to validate the address
+      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+        address
+      )}&key=${GOOGLE_PLACES_API_KEY}`;
+
+      const response = await fetch(geocodeUrl);
+      const data = await response.json();
+
+      if (
+        response.ok &&
+        data.status === "OK" &&
+        data.results &&
+        data.results.length > 0
+      ) {
+        const result = data.results[0];
+        const location = result.geometry.location;
+
+        return {
+          latitude: location.lat,
+          longitude: location.lng,
+          formattedAddress: result.formatted_address,
+          placeId: result.place_id,
+        };
+      } else {
+        console.error("Geocoding failed:", data.status, data.error_message);
+        return null;
+      }
+    } catch (error) {
+      console.error("Error geocoding address:", error);
+      return null;
+    }
+  }
+
+  // Get address suggestions/autocomplete using free Nominatim API
+  static async getAddressSuggestions(
+    query: string,
+    limit: number = 5
+  ): Promise<AddressSuggestion[]> {
+    if (!query.trim() || query.length < 3) {
+      return [];
+    }
+
+    try {
+      // Use Nominatim API (OpenStreetMap) - completely free, no API key required
+      const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+        query
+      )}&addressdetails=1&limit=${limit}&countrycodes=us&dedupe=1`;
+
+      const response = await fetch(nominatimUrl, {
+        headers: {
+          "User-Agent": "Mychanic/1.0 (brycem512@gmail.com)", // Required by Nominatim
+        },
+      });
+
+      if (!response.ok) {
+        console.error("Nominatim API error:", response.status);
+        return [];
+      }
+
+      const data = await response.json();
+
+      return data.map((result: any) => ({
+        placeId:
+          result.place_id?.toString() ||
+          result.osm_id?.toString() ||
+          Math.random().toString(),
+        displayName: result.display_name,
+        latitude: parseFloat(result.lat),
+        longitude: parseFloat(result.lon),
+      }));
+    } catch (error) {
+      console.error("Error fetching address suggestions:", error);
+      return [];
+    }
+  }
+
+  // Mock geocoding for development when API key is not available
+  private static mockGeocodeAddress(address: string): GeocodeResult | null {
+    // Simple validation - check if address has basic components
+    if (!address || address.trim().length < 10) {
+      return null;
+    }
+
+    // Check for basic address components (street number, street name, city, state/zip)
+    const hasStreetNumber = /\d+/.test(address);
+    const hasStreetName = /[A-Za-z]/.test(address);
+    const hasCityState = /,/.test(address) || /\d{5}/.test(address);
+
+    if (!hasStreetNumber || !hasStreetName || !hasCityState) {
+      return null;
+    }
+
+    // Return mock coordinates (Austin, TX area for development)
+    return {
+      latitude: 30.2672 + (Math.random() - 0.5) * 0.1, // Random variation around Austin
+      longitude: -97.7431 + (Math.random() - 0.5) * 0.1,
+      formattedAddress: address.trim(),
+    };
   }
 }
 

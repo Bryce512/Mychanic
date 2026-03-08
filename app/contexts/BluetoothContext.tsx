@@ -11,7 +11,7 @@ import React, {
 import { useBleConnection } from "../services/bleConnections";
 import { AppState } from "react-native";
 import { Device } from "react-native-ble-plx";
-import { obdDataFunctions } from "../services/obdDataCollection";
+import { obdDataFunctions } from "../services/obdService";
 
 // Define the shape of our context
 interface BluetoothContextType {
@@ -30,7 +30,12 @@ interface BluetoothContextType {
   startScan: () => Promise<void>;
   connectToDevice: (device: any, vehicleId?: string) => Promise<boolean>;
   disconnectDevice: () => Promise<void>;
-  sendCommand: (device: any, command: string) => Promise<string>;
+  sendCommand: (
+    device: any,
+    command: string,
+    retries?: number,
+    customTimeoutMs?: number
+  ) => Promise<string>;
   showAllDevices: () => Promise<void>;
   rememberedDevice: any | null;
   verifyConnection: (deviceId: string) => Promise<boolean>;
@@ -196,7 +201,7 @@ export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
               require("../services/firebaseService").default.getCurrentUser();
             if (user) {
               const diag =
-                await require("../services/firebaseService").default.getVehicleDiagInfo(
+                await require("../services/firebaseService").default.getVehicleById(
                   user.uid,
                   vehicleId
                 );

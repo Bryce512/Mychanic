@@ -9,6 +9,8 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { vehicleFormStyles } from "../theme/styles/VehicleForm.styles";
 import type { KeyboardTypeOptions } from "react-native";
@@ -18,49 +20,28 @@ import firebaseService from "../services/firebaseService";
 interface VehicleFormProps {
   initialData?: any;
   loading?: boolean;
-  onSave: (form: any) => Promise<{ id: string | null } | undefined>;
+  onSave: (
+    vehicleData: any,
+    maintConfig?: any,
+    imageUri?: string | null
+  ) => Promise<{ id: string | null } | undefined>;
   onDelete?: () => Promise<void>;
   isEdit?: boolean;
 }
 
-const VEHICLE_FIELDS = ["year", "make", "model", "mileage", "name", "engine"];
+const VEHICLE_FIELDS = [
+  "year",
+  "make",
+  "model",
+  "mileage",
+  "nickname",
+  "vin",
+  "engine",
+];
 const REQUIRED_FIELDS = ["year", "make", "model", "mileage"];
 
 const DEFAULT_IMAGE =
   "https://firebasestorage.googleapis.com/v0/b/fluid-tangent-405719.firebasestorage.app/o/public%2Fcar_default.png?alt=media&token=5232adad-a5f7-4b8c-be47-781163a7eaa1";
-
-const MAINT_FIELDS: {
-  key: keyof MaintConfig;
-  label: string;
-  keyboardType: KeyboardTypeOptions;
-  placeholder: string;
-}[] = [
-  {
-    key: "milesBetweenOilChanges",
-    label: "Miles Between Oil Changes",
-    keyboardType: "numeric",
-    placeholder: "We Suggest 5000 miles",
-  },
-  {
-    key: "milesBetweenBrakeChanges",
-    label: "Miles Between Brake Changes",
-    keyboardType: "numeric",
-    placeholder: "We Suggest 20000 miles",
-  },
-  {
-    key: "batteryInstallDate",
-    label: "Battery Install Date (YYYY-MM-DD)",
-    keyboardType: "default",
-    placeholder: "Found on a sticker on the battery",
-  },
-];
-
-type MaintConfig = {
-  milesBetweenOilChanges: string;
-  milesBetweenBrakeChanges: string;
-  batteryInstallDate: string;
-  [key: string]: string; // index signature for dynamic access
-};
 
 const VehicleForm: React.FC<VehicleFormProps> = ({
   initialData = {},
@@ -69,26 +50,87 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
   onDelete,
   isEdit = false,
 }) => {
-  const [form, setForm] = useState({ ...initialData });
+  const [form, setForm] = useState({
+    ...initialData,
+    vin: initialData.vin || "", // Ensure VIN is always a string
+  });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [saving, setSaving] = useState(false);
   const [image, setImage] = useState<string | null>(initialData.image || null);
   const [uploading, setUploading] = useState(false);
-  // Maintenance config state
-  const [maintConfig, setMaintConfig] = useState<MaintConfig>({
-    milesBetweenOilChanges:
-      initialData.maintConfigs?.milesBetweenOilChanges?.toString() || "",
-    milesBetweenBrakeChanges:
-      initialData.maintConfigs?.milesBetweenBrakeChanges?.toString() || "",
-    batteryInstallDate: initialData.maintConfigs?.batteryInstallDate || "",
-  });
-
-  const handleMaintChange = (key: string, value: string) => {
-    setMaintConfig({ ...maintConfig, [key]: value });
-  };
+  const [vin, setVin] = useState("");
+  const [lookupLoading, setLookupLoading] = useState(false);
 
   const handleChange = (key: string, value: string) => {
     setForm({ ...form, [key]: value });
+  };
+
+  const lookupVehicleByVin = async () => {
+    if (!vin.trim()) {
+      Alert.alert("Error", "Please enter a VIN");
+      return;
+    }
+
+    if (vin.length !== 17) {
+      Alert.alert("Error", "VIN must be 17 characters long");
+      return;
+    }
+
+    setLookupLoading(true);
+    try {
+      const response = await fetch(
+        `https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${vin}?format=json`
+      );
+      const data = await response.json();
+
+      if (data.Results && data.Results.length > 0) {
+        const results = data.Results;
+        const vehicleData: any = {};
+
+        // Extract relevant information from NHTSA response
+        results.forEach((result: any) => {
+          switch (result.Variable) {
+            case "Model Year":
+              vehicleData.year = result.Value;
+              break;
+            case "Make":
+              vehicleData.make = result.Value;
+              break;
+            case "Model":
+              vehicleData.model = result.Value;
+              break;
+            case "Engine Model":
+            case "Engine Configuration":
+            case "Displacement (L)":
+              if (result.Value && result.Value !== "Not Applicable") {
+                vehicleData.engine = result.Value;
+              }
+              break;
+          }
+        });
+
+        // Update form with the retrieved data
+        setForm({ ...form, ...vehicleData, vin });
+        Alert.alert("Success", "Vehicle information retrieved successfully!");
+      } else {
+        Alert.alert(
+          "Error",
+          "Could not retrieve vehicle information. Please check the VIN and try again."
+        );
+      }
+    } catch (error) {
+      console.error("VIN lookup error:", error);
+      Alert.alert(
+        "Error",
+        "Failed to lookup vehicle information. Please try again."
+      );
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  const lookupVehicleByLicensePlate = async () => {
+    // License plate lookup removed - using VIN only
   };
 
   const pickImage = async () => {
@@ -112,35 +154,6 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
         }
       }
     );
-  };
-
-  // Upload image to Firebase Storage and return download URL
-  const uploadImageAsync = async (
-    userId: string,
-    vehicleId: string,
-    uri: string
-  ) => {
-    setUploading(true);
-    try {
-      // Get file extension
-      const extMatch = uri.match(/\.([a-zA-Z0-9]+)$/);
-      const ext = extMatch ? extMatch[1] : "jpg";
-      const url = await firebaseService.uploadVehicleImage(
-        userId,
-        vehicleId,
-        uri,
-        ext
-      );
-      return url;
-    } catch (e) {
-      Alert.alert(
-        "Image Upload Failed",
-        "Could not upload image. Using default image."
-      );
-      return DEFAULT_IMAGE;
-    } finally {
-      setUploading(false);
-    }
   };
 
   const handleSave = async () => {
@@ -169,68 +182,20 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
         mileage: form.mileage ? parseInt(form.mileage, 10) : undefined,
       };
 
-      // Save vehicle data first to get the vehicle ID
-      const vehicleResult = await onSave(updatedForm);
-      const vehicleId = vehicleResult?.id;
+      // Default maintenance config for new vehicles
+      const defaultMaintConfig = {
+        milesBetweenOilChanges: 7500,
+        milesBetweenBrakeChangess: 50000,
+        batteryInstallDate: null,
+      };
 
-      if (!vehicleId) {
-        Alert.alert("Error", "Failed to save vehicle data.");
-        setSaving(false);
-        return;
-      }
-
-      // Now handle image upload with the actual vehicle ID
-      let imageUrl = DEFAULT_IMAGE;
-      if (image) {
-        if (image.startsWith("http")) {
-          imageUrl = image;
-        } else {
-          // Need userId for path
-          const currentUser = firebaseService.getCurrentUser();
-          if (!currentUser) {
-            Alert.alert("Error", "You must be signed in to upload an image.");
-            setSaving(false);
-            return;
-          }
-          // Use the vehicle ID we just got
-          imageUrl = await uploadImageAsync(currentUser.uid, vehicleId, image);
-        }
-      }
-
-      // Update the vehicle with the image URL if it's different
-      if (imageUrl !== updatedForm.image) {
-        const currentUser = firebaseService.getCurrentUser();
-        if (currentUser) {
-          await firebaseService.updateVehicle(currentUser.uid, vehicleId, {
-            ...updatedForm,
-            image: imageUrl,
-          });
-        }
-      }
-
-      // Save maintenance config to /users/<userId>/vehicles/<vehicleId>/maintConfigs
-      const currentUser = firebaseService.getCurrentUser();
-      if (currentUser) {
-        const maintConfigData = {
-          milesBetweenOilChanges: maintConfig.milesBetweenOilChanges
-            ? parseInt(maintConfig.milesBetweenOilChanges, 10)
-            : undefined,
-          milesBetweenBrakeChanges: maintConfig.milesBetweenBrakeChanges
-            ? parseInt(maintConfig.milesBetweenBrakeChanges, 10)
-            : undefined,
-          batteryInstallDate: maintConfig.batteryInstallDate || undefined,
-        };
-        // Write to /users/<userId>/vehicles/<vehicleId>/maintConfigs
-        const db = await import("@react-native-firebase/database");
-        const ref = db.ref(
-          db.getDatabase(),
-          `users/${currentUser.uid}/vehicles/${vehicleId}/maintConfigs`
-        );
-        await db.set(ref, maintConfigData);
-      }
+      // Return the data to the parent component for saving
+      const result = await onSave(updatedForm, defaultMaintConfig, image);
+      return result;
     } catch (e) {
-      console.error("Error saving vehicle:", e);
-      Alert.alert("Failed to save vehicle info.");
+      console.error("Error in form:", e);
+      Alert.alert("Failed to process vehicle info.");
+      throw e;
     } finally {
       setSaving(false);
     }
@@ -262,83 +227,118 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
   };
 
   return (
-    <ScrollView contentContainerStyle={vehicleFormStyles.container}>
-
-      {/* Image Picker and Display */}
-      <View style={vehicleFormStyles.imageSection}>
-        <TouchableOpacity
-          onPress={pickImage}
-          disabled={uploading || saving || loading}
-        >
-          <Image
-            source={{ uri: image || DEFAULT_IMAGE }}
-            style={vehicleFormStyles.image}
-            resizeMode="cover"
-          />
-          <Text style={vehicleFormStyles.imageLabel}>
-            {uploading ? "Uploading..." : "Tap to change image"}
-          </Text>
-        </TouchableOpacity>
-        {uploading && <ActivityIndicator style={{ marginTop: 8 }} />}
-      </View>
-
-      {VEHICLE_FIELDS.map((field) => (
-        <View key={field} style={vehicleFormStyles.inputGroup}>
-          <Text style={vehicleFormStyles.label}>
-            {field.charAt(0).toUpperCase() + field.slice(1)}
-            {REQUIRED_FIELDS.includes(field) && (
-              <Text style={{ color: "red" }}>*</Text>
-            )}
-          </Text>
-          <TextInput
-            style={vehicleFormStyles.input}
-            value={form[field]?.toString() || ""}
-            onChangeText={(text) => handleChange(field, text)}
-            keyboardType={
-              field === "mileage" || field === "year" ? "numeric" : "default"
-            }
-          />
-          {errors[field] && (
-            <Text style={{ color: "red", fontSize: 12 }}>{errors[field]}</Text>
-          )}
-        </View>
-      ))}
-      {/* Maintenance Config Fields */}
-      <Text
-        style={[vehicleFormStyles.label, { marginTop: 16, fontWeight: "bold" }]}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
+    >
+      <ScrollView
+        contentContainerStyle={vehicleFormStyles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        Maintenance Settings
-      </Text>
-      {MAINT_FIELDS.map((field) => (
-        <View key={field.key} style={vehicleFormStyles.inputGroup}>
-          <Text style={vehicleFormStyles.label}>{field.label}</Text>
-          <TextInput
-            style={vehicleFormStyles.input}
-            value={maintConfig[field.key]}
-            onChangeText={(text) =>
-              handleMaintChange(field.key as string, text)
-            }
-            keyboardType={field.keyboardType}
-            placeholder={field.placeholder}
-          />
+        {/* Image Picker and Display */}
+        <View style={vehicleFormStyles.imageSection}>
+          <TouchableOpacity
+            onPress={pickImage}
+            disabled={uploading || saving || loading}
+          >
+            <Image
+              source={{ uri: image || DEFAULT_IMAGE }}
+              style={vehicleFormStyles.image}
+              resizeMode="cover"
+            />
+            <Text style={vehicleFormStyles.imageLabel}>
+              {uploading ? "Uploading..." : "Tap to change image"}
+            </Text>
+          </TouchableOpacity>
+          {uploading && <ActivityIndicator style={{ marginTop: 8 }} />}
         </View>
-      ))}
-      <Button
-        title={saving || loading ? "Saving..." : "Save"}
-        onPress={handleSave}
-        disabled={saving || loading || uploading}
-      />
-      {isEdit && onDelete && (
-        <View style={{ marginTop: 24 }}>
-          <Button
-            title={saving || loading ? "Deleting..." : "Delete Vehicle"}
-            color="#d32f2f"
-            onPress={handleDelete}
-            disabled={saving || loading}
-          />
-        </View>
-      )}
-    </ScrollView>
+
+        {/* Vehicle Lookup Section - Only show when adding new vehicle */}
+        {!isEdit && (
+          <View style={vehicleFormStyles.lookupSection}>
+            <Text style={vehicleFormStyles.sectionTitle}>
+              Quick Vehicle Lookup
+            </Text>
+            <Text style={vehicleFormStyles.sectionSubtitle}>
+              Enter VIN to auto-fill vehicle details from NHTSA database
+            </Text>
+
+            {/* VIN Lookup */}
+            <View style={vehicleFormStyles.lookupGroup}>
+              <Text style={vehicleFormStyles.lookupLabel}>
+                VIN (17 characters)
+              </Text>
+              <View style={vehicleFormStyles.lookupInputRow}>
+                <TextInput
+                  style={[vehicleFormStyles.input, { flex: 1, marginRight: 8 }]}
+                  value={vin}
+                  onChangeText={setVin}
+                  placeholder="Enter VIN"
+                  maxLength={17}
+                  autoCapitalize="characters"
+                />
+                <TouchableOpacity
+                  style={vehicleFormStyles.lookupButton}
+                  onPress={lookupVehicleByVin}
+                  disabled={lookupLoading}
+                >
+                  {lookupLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={vehicleFormStyles.lookupButtonText}>
+                      Lookup
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {VEHICLE_FIELDS.map((field) => (
+          <View key={field} style={vehicleFormStyles.inputGroup}>
+            <Text style={vehicleFormStyles.label}>
+              {field.charAt(0).toUpperCase() + field.slice(1)}
+              {REQUIRED_FIELDS.includes(field) && (
+                <Text style={{ color: "red" }}>*</Text>
+              )}
+            </Text>
+            <TextInput
+              style={vehicleFormStyles.input}
+              value={form[field]?.toString() || ""}
+              onChangeText={(text) => handleChange(field, text)}
+              keyboardType={
+                field === "mileage" || field === "year" ? "numeric" : "default"
+              }
+              autoCapitalize={field === "vin" ? "characters" : "words"}
+              maxLength={field === "vin" ? 17 : undefined}
+            />
+            {errors[field] && (
+              <Text style={{ color: "red", fontSize: 12 }}>
+                {errors[field]}
+              </Text>
+            )}
+          </View>
+        ))}
+        <Button
+          title={saving || loading ? "Saving..." : "Save"}
+          onPress={handleSave}
+          disabled={saving || loading || uploading}
+        />
+        {isEdit && onDelete && (
+          <View style={{ marginTop: 24 }}>
+            <Button
+              title={saving || loading ? "Deleting..." : "Delete Vehicle"}
+              color="#d32f2f"
+              onPress={handleDelete}
+              disabled={saving || loading}
+            />
+          </View>
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 

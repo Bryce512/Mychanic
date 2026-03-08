@@ -25,7 +25,7 @@ import {
   VehicleMake,
   VehicleModel,
 } from "../services/vehicleDataService";
-import { dtcCodeService, DTCCode } from "../services/dtcCodeService";
+import { dtcCodeService, DTCCode } from "../services/vehicleDiagnostics";
 import { Feather } from "@expo/vector-icons";
 
 interface DiagnosticData {

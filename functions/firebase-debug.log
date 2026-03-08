@@ -1,0 +1,175 @@
+[debug] [2025-11-28T02:41:34.716Z] ----------------------------------------------------------------------
+[debug] [2025-11-28T02:41:34.726Z] Command:       /Users/Bryce/.nvm/versions/node/v20.19.2/bin/node /Users/Bryce/.nvm/versions/node/v20.19.2/bin/firebase deploy --only functions
+[debug] [2025-11-28T02:41:34.727Z] CLI Version:   14.26.0
+[debug] [2025-11-28T02:41:34.727Z] Platform:      darwin
+[debug] [2025-11-28T02:41:34.727Z] Node Version:  v20.19.2
+[debug] [2025-11-28T02:41:34.727Z] Time:          Thu Nov 27 2025 19:41:34 GMT-0700 (Mountain Standard Time)
+[debug] [2025-11-28T02:41:34.727Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-11-28T02:41:34.882Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-11-28T02:41:34.883Z] > authorizing via signed-in user (getmychanic@gmail.com)
+[debug] [2025-11-28T02:41:34.883Z] [iam] checking project fluid-tangent-405719 for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2025-11-28T02:41:34.884Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:41:34.884Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:41:34.885Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719:testIamPermissions [none]
+[debug] [2025-11-28T02:41:34.885Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719:testIamPermissions x-goog-quota-user=projects/fluid-tangent-405719
+[debug] [2025-11-28T02:41:34.885Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2025-11-28T02:41:39.510Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719:testIamPermissions 200
+[debug] [2025-11-28T02:41:39.511Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2025-11-28T02:41:39.511Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:41:39.511Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:41:39.511Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/fluid-tangent-405719/serviceAccounts/fluid-tangent-405719@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2025-11-28T02:41:39.511Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/fluid-tangent-405719/serviceAccounts/fluid-tangent-405719@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[debug] [2025-11-28T02:41:52.497Z] *** [apiv2] error from fetch(https://iam.googleapis.com/v1/projects/fluid-tangent-405719/serviceAccounts/fluid-tangent-405719@appspot.gserviceaccount.com:testIamPermissions, {"headers":{},"method":"POST","body":"{\"permissions\":[\"iam.serviceAccounts.actAs\"]}"}): FetchError: request to https://iam.googleapis.com/v1/projects/fluid-tangent-405719/serviceAccounts/fluid-tangent-405719@appspot.gserviceaccount.com:testIamPermissions failed, reason: socket hang up
+[debug] [2025-11-28T02:41:52.498Z] [functions] service account IAM check errored, deploy may fail: Failed to make request to https://iam.googleapis.com/v1/projects/fluid-tangent-405719/serviceAccounts/fluid-tangent-405719@appspot.gserviceaccount.com:testIamPermissions {"name":"FirebaseError","children":[],"exit":1,"message":"Failed to make request to https://iam.googleapis.com/v1/projects/fluid-tangent-405719/serviceAccounts/fluid-tangent-405719@appspot.gserviceaccount.com:testIamPermissions","original":{"message":"request to https://iam.googleapis.com/v1/projects/fluid-tangent-405719/serviceAccounts/fluid-tangent-405719@appspot.gserviceaccount.com:testIamPermissions failed, reason: socket hang up","type":"system","errno":"ECONNRESET","code":"ECONNRESET"},"status":500}
+[info] 
+[info] === Deploying to 'fluid-tangent-405719'...
+[info] 
+[info] i  deploying functions 
+[info] Running command: npm --prefix "$RESOURCE_DIR" run build
+[info] ✔  functions: Finished running predeploy script. 
+[debug] [2025-11-28T02:41:54.457Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:41:54.457Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:41:54.457Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719 [none]
+[debug] [2025-11-28T02:41:58.926Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719 200
+[debug] [2025-11-28T02:41:58.927Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719 {"projectNumber":"578434461817","projectId":"fluid-tangent-405719","lifecycleState":"ACTIVE","name":"Mychanic","labels":{"firebase":"enabled"},"createTime":"2023-11-20T19:58:48.516197Z"}
+[info] i  functions: preparing codebase default for deployment 
+[info] i  functions: ensuring required API cloudfunctions.googleapis.com is enabled... 
+[info] i  functions: ensuring required API cloudbuild.googleapis.com is enabled... 
+[info] i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled... 
+[debug] [2025-11-28T02:41:58.931Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:41:58.932Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:41:58.932Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/fluid-tangent-405719/adminSdkConfig [none]
+[debug] [2025-11-28T02:42:03.894Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/fluid-tangent-405719/adminSdkConfig 200
+[debug] [2025-11-28T02:42:03.894Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/fluid-tangent-405719/adminSdkConfig {"projectId":"fluid-tangent-405719","databaseURL":"https://fluid-tangent-405719-default-rtdb.firebaseio.com","storageBucket":"fluid-tangent-405719.firebasestorage.app"}
+[debug] [2025-11-28T02:42:03.898Z] Validating nodejs source
+[debug] [2025-11-28T02:42:13.763Z] > [functions] package.json contents: {
+  "name": "functions",
+  "scripts": {
+    "lint": "eslint --ext .js,.ts .",
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "24"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "firebase-admin": "^13.6.0",
+    "firebase-functions": "^7.0.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.12.0",
+    "@typescript-eslint/parser": "^5.12.0",
+    "eslint": "^8.9.0",
+    "eslint-config-google": "^0.14.0",
+    "eslint-plugin-import": "^2.25.4",
+    "firebase-functions-test": "^3.4.1",
+    "typescript": "^5.7.3"
+  },
+  "private": true
+}
+[debug] [2025-11-28T02:42:18.770Z] Error: Timed out.
+    at Timeout._onTimeout (/Users/Bryce/.nvm/versions/node/v20.19.2/lib/node_modules/firebase-tools/lib/utils.js:275:49)
+    at listOnTimeout (node:internal/timers:581:17)
+    at process.processTimers (node:internal/timers:519:7)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2025-11-28T02:43:06.206Z] ----------------------------------------------------------------------
+[debug] [2025-11-28T02:43:06.215Z] Command:       /Users/Bryce/.nvm/versions/node/v20.19.2/bin/node /Users/Bryce/.nvm/versions/node/v20.19.2/bin/firebase deploy --only functions
+[debug] [2025-11-28T02:43:06.215Z] CLI Version:   14.26.0
+[debug] [2025-11-28T02:43:06.216Z] Platform:      darwin
+[debug] [2025-11-28T02:43:06.216Z] Node Version:  v20.19.2
+[debug] [2025-11-28T02:43:06.216Z] Time:          Thu Nov 27 2025 19:43:06 GMT-0700 (Mountain Standard Time)
+[debug] [2025-11-28T02:43:06.216Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-11-28T02:43:06.372Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-11-28T02:43:06.372Z] > authorizing via signed-in user (getmychanic@gmail.com)
+[debug] [2025-11-28T02:43:06.372Z] [iam] checking project fluid-tangent-405719 for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2025-11-28T02:43:06.373Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:43:06.374Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:43:06.374Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719:testIamPermissions [none]
+[debug] [2025-11-28T02:43:06.374Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719:testIamPermissions x-goog-quota-user=projects/fluid-tangent-405719
+[debug] [2025-11-28T02:43:06.375Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2025-11-28T02:43:13.978Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719:testIamPermissions 200
+[debug] [2025-11-28T02:43:13.978Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2025-11-28T02:43:13.979Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:43:13.979Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:43:13.979Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/fluid-tangent-405719/serviceAccounts/fluid-tangent-405719@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2025-11-28T02:43:13.979Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/fluid-tangent-405719/serviceAccounts/fluid-tangent-405719@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[debug] [2025-11-28T02:43:56.960Z] *** [apiv2] error from fetch(https://iam.googleapis.com/v1/projects/fluid-tangent-405719/serviceAccounts/fluid-tangent-405719@appspot.gserviceaccount.com:testIamPermissions, {"headers":{},"method":"POST","body":"{\"permissions\":[\"iam.serviceAccounts.actAs\"]}"}): FetchError: request to https://iam.googleapis.com/v1/projects/fluid-tangent-405719/serviceAccounts/fluid-tangent-405719@appspot.gserviceaccount.com:testIamPermissions failed, reason: socket hang up
+[debug] [2025-11-28T02:43:56.963Z] [functions] service account IAM check errored, deploy may fail: Failed to make request to https://iam.googleapis.com/v1/projects/fluid-tangent-405719/serviceAccounts/fluid-tangent-405719@appspot.gserviceaccount.com:testIamPermissions {"name":"FirebaseError","children":[],"exit":1,"message":"Failed to make request to https://iam.googleapis.com/v1/projects/fluid-tangent-405719/serviceAccounts/fluid-tangent-405719@appspot.gserviceaccount.com:testIamPermissions","original":{"message":"request to https://iam.googleapis.com/v1/projects/fluid-tangent-405719/serviceAccounts/fluid-tangent-405719@appspot.gserviceaccount.com:testIamPermissions failed, reason: socket hang up","type":"system","errno":"ECONNRESET","code":"ECONNRESET"},"status":500}
+[info] 
+[info] === Deploying to 'fluid-tangent-405719'...
+[info] 
+[info] i  deploying functions 
+[info] Running command: npm --prefix "$RESOURCE_DIR" run build
+[info] ✔  functions: Finished running predeploy script. 
+[debug] [2025-11-28T02:43:58.910Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:43:58.910Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:43:58.911Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719 [none]
+[debug] [2025-11-28T02:44:05.472Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719 200
+[debug] [2025-11-28T02:44:05.473Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/fluid-tangent-405719 {"projectNumber":"578434461817","projectId":"fluid-tangent-405719","lifecycleState":"ACTIVE","name":"Mychanic","labels":{"firebase":"enabled"},"createTime":"2023-11-20T19:58:48.516197Z"}
+[info] i  functions: preparing codebase default for deployment 
+[info] i  functions: ensuring required API cloudfunctions.googleapis.com is enabled... 
+[info] i  functions: ensuring required API cloudbuild.googleapis.com is enabled... 
+[info] i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled... 
+[debug] [2025-11-28T02:44:05.478Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:44:05.478Z] Checked if tokens are valid: true, expires at: 1764300613894
+[debug] [2025-11-28T02:44:05.478Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/fluid-tangent-405719/adminSdkConfig [none]
+[debug] [2025-11-28T02:44:17.887Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/fluid-tangent-405719/adminSdkConfig 200
+[debug] [2025-11-28T02:44:17.887Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/fluid-tangent-405719/adminSdkConfig {"projectId":"fluid-tangent-405719","databaseURL":"https://fluid-tangent-405719-default-rtdb.firebaseio.com","storageBucket":"fluid-tangent-405719.firebasestorage.app"}
+[debug] [2025-11-28T02:44:17.893Z] Validating nodejs source
+[debug] [2025-11-28T02:44:27.914Z] checkFunctionsSDKVersion was unable to fetch information from NPM Error: spawnSync npm ETIMEDOUT
+    at Object.spawnSync (node:internal/child_process:1123:20)
+    at Object.spawnSync (node:child_process:877:24)
+    at Function.spawnSync [as sync] (/Users/Bryce/.nvm/versions/node/v20.19.2/lib/node_modules/firebase-tools/node_modules/cross-spawn/index.js:26:23)
+    at Object.getLatestSDKVersion (/Users/Bryce/.nvm/versions/node/v20.19.2/lib/node_modules/firebase-tools/lib/deploy/functions/runtimes/node/versioning.js:54:25)
+    at Object.checkFunctionsSDKVersion (/Users/Bryce/.nvm/versions/node/v20.19.2/lib/node_modules/firebase-tools/lib/deploy/functions/runtimes/node/versioning.js:74:32)
+    at Delegate.validate (/Users/Bryce/.nvm/versions/node/v20.19.2/lib/node_modules/firebase-tools/lib/deploy/functions/runtimes/node/index.js:89:20)
+    at loadCodebases (/Users/Bryce/.nvm/versions/node/v20.19.2/lib/node_modules/firebase-tools/lib/deploy/functions/prepare.js:312:31)
+    at async prepare (/Users/Bryce/.nvm/versions/node/v20.19.2/lib/node_modules/firebase-tools/lib/deploy/functions/prepare.js:62:24)
+    at async chain (/Users/Bryce/.nvm/versions/node/v20.19.2/lib/node_modules/firebase-tools/lib/deploy/index.js:43:9)
+    at async deploy (/Users/Bryce/.nvm/versions/node/v20.19.2/lib/node_modules/firebase-tools/lib/deploy/index.js:123:9)
+[debug] [2025-11-28T02:44:27.918Z] > [functions] package.json contents: {
+  "name": "functions",
+  "scripts": {
+    "lint": "eslint --ext .js,.ts .",
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "24"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "firebase-admin": "^13.6.0",
+    "firebase-functions": "^7.0.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.12.0",
+    "@typescript-eslint/parser": "^5.12.0",
+    "eslint": "^8.9.0",
+    "eslint-config-google": "^0.14.0",
+    "eslint-plugin-import": "^2.25.4",
+    "firebase-functions-test": "^3.4.1",
+    "typescript": "^5.7.3"
+  },
+  "private": true
+}
+[debug] [2025-11-28T02:44:32.933Z] Error: Timed out.
+    at Timeout._onTimeout (/Users/Bryce/.nvm/versions/node/v20.19.2/lib/node_modules/firebase-tools/lib/utils.js:275:49)
+    at listOnTimeout (node:internal/timers:581:17)
+    at process.processTimers (node:internal/timers:519:7)
+[error] 
+[error] Error: An unexpected error has occurred.

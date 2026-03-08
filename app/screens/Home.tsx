@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -5,13 +6,14 @@ import {
   Image,
   useColorScheme,
   StatusBar,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import React from "react";
 import Button from "../components/Button";
 import Card, { CardHeader, CardContent } from "../components/Card";
+import PricingModal, { pricingModalStyles } from "../components/PricingModal";
 import { styles } from "../theme/styles/Home.styles";
 import { colors } from "../theme/colors";
 
@@ -19,6 +21,7 @@ export default function HomeScreen() {
   const navigation = useNavigation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
+  const [showPricingModal, setShowPricingModal] = useState(false);
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom", "left", "right"]}>
@@ -28,6 +31,25 @@ export default function HomeScreen() {
           <Text style={[styles.heroTitle, isDark && styles.textLight]}>
             Expert Auto Repairs With Complete Transparency
           </Text>
+          <TouchableOpacity
+            style={pricingModalStyles.pricingGuideContainer}
+            onPress={() => setShowPricingModal(true)}
+          >
+            <Feather
+              name="info"
+              size={16}
+              color={colors.primary[500]}
+              style={pricingModalStyles.pricingIcon}
+            />
+            <Text
+              style={[
+                pricingModalStyles.pricingGuideText,
+                isDark && pricingModalStyles.pricingGuideTextDark,
+              ]}
+            >
+              Pricing Guide
+            </Text>
+          </TouchableOpacity>
           <Text style={[styles.heroSubtitle, isDark && styles.textMutedLight]}>
             Mychanic connects you with trusted mechanics who offer transparent
             pricing, honest service, and expertise tailored to your vehicle.
@@ -35,18 +57,19 @@ export default function HomeScreen() {
 
           <View style={styles.buttonGroup}>
             <Button
+              title="Request Job"
+              onPress={() => navigation.navigate("RequestJob" as never)}
+              icon={<Feather name="plus" size={16} color={colors.white} />}
+              size="lg"
+            />
+            <Button
               title="Find Mechanics"
               onPress={() => navigation.navigate("FindMechanics" as never)}
               icon={
                 <Feather name="arrow-right" size={16} color={colors.white} />
               }
               size="lg"
-            />
-            <Button
-              title="Mechanic Dashboard"
-              onPress={() => navigation.navigate("MechanicDashboard" as never)}
-              variant="secondary"
-              size="lg"
+              variant="outline"
             />
           </View>
 
@@ -377,6 +400,11 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <PricingModal
+        visible={showPricingModal}
+        onClose={() => setShowPricingModal(false)}
+      />
     </SafeAreaView>
   );
 }

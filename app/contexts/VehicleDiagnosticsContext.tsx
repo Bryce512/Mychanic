@@ -11,7 +11,9 @@ export interface VehicleDiagnostics {
   battV: number;
   battVLastTimestamp: number;
   milesSinceLastBrakeService: number;
-  milesBetweenBrakeService: number;
+  milesBetweenBrakeChanges: number;
+  milesSinceLastTireService: number;
+  milesBetweenTireService: number;
   lastSync: number;
   engineRunning?: boolean;
 }
@@ -50,20 +52,49 @@ export const DiagnosticsProvider = ({
       await Promise.all(
         vehicles.map(async (v: any) => {
           try {
-            const diagInfo = await firebaseService.getVehicleDiagInfo(
-              userId,
-              v.id
-            );
+            const diagInfo = await firebaseService.getVehicleById(v.id);
+            console.log(diagInfo);
             diagMap[v.id] = {
               vehicleId: v.id,
               dtcCodes: diagInfo?.dtcCodes || [],
-              milesSinceLastOilChange: diagInfo?.milesSinceLastOilChange || 0,
-              milesBetweenOilChanges: diagInfo?.milesBetweenOilChanges || 5000,
+              milesSinceLastOilChange:
+                diagInfo?.mileage && diagInfo?.milesAtLastOilChange
+                  ? Math.max(
+                      0,
+                      diagInfo.mileage - diagInfo.milesAtLastOilChange
+                    )
+                  : 0,
+              milesBetweenOilChanges:
+                diagInfo?.maintConfigs?.milesBetweenOilChanges ||
+                diagInfo?.milesBetweenOilChanges ||
+                5000,
               battV: diagInfo?.battV || 0,
               battVLastTimestamp: diagInfo?.battVLastTimestamp || Date.now(),
               milesSinceLastBrakeService:
-                diagInfo?.milesSinceLastBrakeService || 0,
-              milesBetweenBrakeService: diagInfo?.milesBetweenBrakeService || 0,
+                diagInfo?.mileage && diagInfo?.milesAtLastBrakeService
+                  ? Math.max(
+                      0,
+                      diagInfo.mileage - diagInfo.milesAtLastBrakeService
+                    )
+                  : 0,
+              milesBetweenBrakeChanges:
+                diagInfo?.maintConfigs?.milesBetweenBrakeChanges ||
+                diagInfo?.diagnosticData?.milesBetweenBrakeService ||
+                diagInfo?.diagnosticData?.milesBetweenBrakeChanges ||
+                diagInfo?.milesBetweenBrakeChanges ||
+                30000,
+              milesSinceLastTireService:
+                diagInfo?.mileage && diagInfo?.milesAtLastTireService
+                  ? Math.max(
+                      0,
+                      diagInfo.mileage - diagInfo.milesAtLastTireService
+                    )
+                  : 0,
+              milesBetweenTireService:
+                diagInfo?.maintConfigs?.milesBetweenTireService ||
+                diagInfo?.diagnosticData?.milesBetweenTireService ||
+                diagInfo?.milesBetweenTireService ||
+                5000,
               lastSync: diagInfo?.lastSync || Date.now(),
               engineRunning: diagInfo?.engineRunning || false,
             };
@@ -81,7 +112,9 @@ export const DiagnosticsProvider = ({
               battV: 0,
               battVLastTimestamp: Date.now(),
               milesSinceLastBrakeService: 0,
-              milesBetweenBrakeService: 0,
+              milesBetweenBrakeChanges: 30000,
+              milesSinceLastTireService: 0,
+              milesBetweenTireService: 5000,
               lastSync: Date.now(),
               engineRunning: false,
             };

@@ -5,6 +5,9 @@ buildscript {
     google()
     mavenCentral()
   }
+  ext{
+    minSdkVersion = 24
+  }
   dependencies {
         classpath 'com.google.gms:google-services:4.4.1'
     classpath('com.android.tools.build:gradle')

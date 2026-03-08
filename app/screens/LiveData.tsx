@@ -13,7 +13,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { useBluetooth } from "../contexts/BluetoothContext";
-import { pidCommands } from "../services/pidCommands";
+import { obdDataFunctions } from "../services/obdService";
+import { obdDataFunctions as obdFunctions } from "../services/obdService";
 import Card, { CardContent, CardHeader } from "../components/Card";
 import LiveDataParameter from "../components/LiveDataParameter";
 import { colors } from "../theme/colors";
@@ -122,7 +123,7 @@ export default function LiveDataScreen() {
   const [isPolling, setIsPolling] = useState(false);
   const [pollInterval, setPollInterval] = useState<NodeJS.Timeout | null>(null);
 
-  const pidService = pidCommands();
+  // const pidService = pidCommands();
 
   // Initialize live data structure with all parameters shown
   const [liveData, setLiveData] = useState<LiveDataItem[]>(() =>
@@ -139,38 +140,42 @@ export default function LiveDataScreen() {
     }
 
     try {
-      // Fetch voltage
+      // Fetch voltage with enhanced error handling
       try {
         console.log("Sending voltage command...");
-        const voltage = await pidService.getCurrentVoltage(plxDevice);
+        const voltage = await obdDataFunctions.fetchVoltage(
+          plxDevice,
+          bluetoothContext.sendCommand,
+          (message) => console.log(`[VOLTAGE] ${message}`)
+        );
         console.log("Voltage raw response:", voltage);
-        if (voltage && !String(voltage).includes("NO DATA")) {
-          const match = String(voltage).match(/(\d+\.?\d*)/);
-          if (match) {
-            const voltageValue = parseFloat(match[1]);
-            console.log("Parsed voltage value:", voltageValue);
-            setLiveData((prevData) =>
-              prevData.map((item) =>
-                item.id === "voltage"
-                  ? { ...item, value: voltageValue.toFixed(1) }
-                  : item
-              )
-            );
-          }
+        if (voltage) {
+          const voltageValue = parseFloat(voltage);
+          console.log("Parsed voltage value:", voltageValue);
+          setLiveData((prevData) =>
+            prevData.map((item) =>
+              item.id === "voltage"
+                ? { ...item, value: voltageValue.toFixed(1) }
+                : item
+            )
+          );
         } else {
-          console.log("Voltage returned NO DATA or null");
+          console.log("Voltage returned null or invalid");
         }
       } catch (e) {
         console.log("Failed to fetch voltage:", e);
       }
 
-      // Wait before next command
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Wait longer before next command (voltage needs more time to stabilize)
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Fetch RPM
       try {
         console.log("Sending RPM command...");
-        const rpm = await pidService.getEngineRPM(plxDevice);
+        const rpm = await obdDataFunctions.getEngineRPM(
+          plxDevice,
+          bluetoothContext.sendCommand
+        );
         console.log("RPM raw response:", rpm);
         if (rpm && typeof rpm === "number") {
           console.log("Parsed RPM value:", rpm);
@@ -190,7 +195,10 @@ export default function LiveDataScreen() {
       // Fetch vehicle speed
       try {
         console.log("Sending speed command...");
-        const speed = await pidService.getVehicleSpeed(plxDevice);
+        const speed = await obdDataFunctions.getVehicleSpeed(
+          plxDevice,
+          bluetoothContext.sendCommand
+        );
         console.log("Speed raw response:", speed);
         if (speed !== null) {
           console.log("Parsed speed value:", speed);
@@ -210,7 +218,10 @@ export default function LiveDataScreen() {
       // Fetch coolant temperature
       try {
         console.log("Sending coolant temperature command...");
-        const coolantTemp = await pidService.getCoolantTemperature(plxDevice);
+        const coolantTemp = await obdDataFunctions.getCoolantTemperature(
+          plxDevice,
+          bluetoothContext.sendCommand
+        );
         console.log("Coolant temp raw response:", coolantTemp);
         if (coolantTemp) {
           console.log("Parsed coolant temp value:", coolantTemp.celsius);
@@ -232,7 +243,10 @@ export default function LiveDataScreen() {
       // Fetch engine load
       try {
         console.log("Sending engine load command...");
-        const engineLoad = await pidService.getEngineLoad(plxDevice);
+        const engineLoad = await obdDataFunctions.getEngineLoad(
+          plxDevice,
+          bluetoothContext.sendCommand
+        );
         console.log("Engine load raw response:", engineLoad);
         if (engineLoad !== null) {
           console.log("Parsed engine load value:", engineLoad);
@@ -252,7 +266,10 @@ export default function LiveDataScreen() {
       // Fetch throttle position
       try {
         console.log("Sending throttle position command...");
-        const throttlePos = await pidService.getThrottlePosition(plxDevice);
+        const throttlePos = await obdDataFunctions.getThrottlePosition(
+          plxDevice,
+          bluetoothContext.sendCommand
+        );
         console.log("Throttle position raw response:", throttlePos);
         if (throttlePos !== null) {
           console.log("Parsed throttle position value:", throttlePos);
@@ -274,7 +291,10 @@ export default function LiveDataScreen() {
       // Fetch fuel level
       try {
         console.log("Sending fuel level command...");
-        const fuelLevel = await pidService.getFuelLevel(plxDevice);
+        const fuelLevel = await obdDataFunctions.getFuelLevel(
+          plxDevice,
+          bluetoothContext.sendCommand
+        );
         console.log("Fuel level raw response:", fuelLevel);
         if (fuelLevel !== null) {
           console.log("Parsed fuel level value:", fuelLevel);
@@ -294,7 +314,10 @@ export default function LiveDataScreen() {
       // Fetch intake air temperature
       try {
         console.log("Sending intake air temperature command...");
-        const intakeTemp = await pidService.getIntakeAirTemperature(plxDevice);
+        const intakeTemp = await obdDataFunctions.getIntakeAirTemperature(
+          plxDevice,
+          bluetoothContext.sendCommand
+        );
         console.log("Intake temp raw response:", intakeTemp);
         if (intakeTemp) {
           console.log("Parsed intake temp value:", intakeTemp.celsius);
@@ -316,8 +339,9 @@ export default function LiveDataScreen() {
       // Fetch manifold pressure
       try {
         console.log("Sending manifold pressure command...");
-        const manifoldPressure = await pidService.getManifoldPressure(
-          plxDevice
+        const manifoldPressure = await obdDataFunctions.getManifoldPressure(
+          plxDevice,
+          bluetoothContext.sendCommand
         );
         console.log("Manifold pressure raw response:", manifoldPressure);
         if (manifoldPressure !== null) {
@@ -371,8 +395,8 @@ export default function LiveDataScreen() {
       }
       setIsPolling(false);
     } else {
-      // Start polling every 2 seconds
-      const interval = setInterval(fetchLiveData, 2000);
+      // Start polling every 5 seconds (increased due to voltage command timing)
+      const interval = setInterval(fetchLiveData, 5000);
       setPollInterval(interval);
       setIsPolling(true);
       fetchLiveData(); // Initial fetch
@@ -442,7 +466,8 @@ export default function LiveDataScreen() {
   const secondaryData = sortedData.slice(4);
 
   return (
-    <SafeAreaView style={[styles.container, isDark && styles.containerDark]}>
+    <SafeAreaView style={[styles.container, isDark && styles.containerDark]}
+    edges={['bottom','left', 'right']}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -533,7 +558,7 @@ export default function LiveDataScreen() {
           <View style={styles.instructions}>
             <Text style={[styles.instructionText, isDark && styles.textMuted]}>
               Pull down to refresh • Use Start/Stop to toggle auto-refresh every
-              2 seconds
+              5 seconds
             </Text>
           </View>
         </View>

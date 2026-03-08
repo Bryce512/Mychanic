@@ -745,6 +745,7 @@ Format your response as JSON with these fields: analysis, suggestedSteps (array)
     return validPriorities.includes(priority) ? priority : "medium";
   }
 
+
   /**
    * Save diagnostic session for future reference
    */

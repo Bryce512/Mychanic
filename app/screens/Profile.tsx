@@ -4,27 +4,29 @@ import {
   View,
   Text,
   Button,
-  StatusBar,
   TouchableOpacity,
   Animated,
+  Alert,
+  Modal,
 } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
 import { styles } from "../theme/styles/Profile.styles";
-import { getUserProfile } from "../services/firebaseService";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { colors } from "../theme/colors";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ToggleButton } from "react-native-paper";
+import { deleteAccount } from "../services/firebaseService";
 
 const Profile = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, profile, viewMode, toggleViewMode } = useAuth();
   const navigation = useNavigation();
-  const [profile, setProfile] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
+  const [deleting, setDeleting] = React.useState(false);
   const [toastVisible, setToastVisible] = React.useState(false);
   const [showUpdateSuccess, setShowUpdateSuccess] = React.useState(false);
+  const [showSettings, setShowSettings] = React.useState(false);
   const fadeAnim = React.useState(new Animated.Value(0))[0];
-
   const showToast = (message: string) => {
     setToastVisible(true);
 
@@ -59,25 +61,6 @@ const Profile = () => {
     return phone; // Return as-is if not 10 digits
   };
 
-  React.useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (user) {
-        try {
-          const profile = await getUserProfile(user.uid);
-          setProfile(profile);
-        } catch (error) {
-          console.error("📋 Profile screen (initial): Error fetching profile:", error);
-        } finally {
-          setLoading(false);
-        }
-      } else {
-        setLoading(false);
-      }
-    };
-
-    fetchUserProfile();
-  }, [user]);
-
   // Reload profile data when screen comes into focus (after editing)
   useFocusEffect(
     React.useCallback(() => {
@@ -85,10 +68,6 @@ const Profile = () => {
         if (user) {
           setLoading(true);
           try {
-            const profile = await getUserProfile(user.uid);
-            const previousProfile = profile;
-            setProfile(profile);
-
             // Check if we should show success message (profile was updated)
             if (showUpdateSuccess) {
               showToast("Profile updated successfully!");
@@ -107,6 +86,71 @@ const Profile = () => {
 
   const hasCompleteProfile =
     profile && (profile.name || profile.phone || profile.address);
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account",
+      "Are you sure you want to permanently delete your account? This action cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            Alert.alert(
+              "Confirm Deletion",
+              "Type 'DELETE' below to confirm permanent account deletion.",
+              [
+                {
+                  text: "Cancel",
+                  style: "cancel",
+                },
+                {
+                  text: "Delete Account",
+                  style: "destructive",
+                  onPress: async () => {
+                    if (!user?.uid) {
+                      Alert.alert("Error", "User ID not found");
+                      return;
+                    }
+
+                    setDeleting(true);
+                    try {
+                      const result = await deleteAccount(user.uid);
+
+                      if (result.success) {
+                        Alert.alert(
+                          "Account Deleted",
+                          "Your account has been permanently deleted."
+                        );
+                        // The auth state will change automatically and navigate to Login
+                      } else {
+                        Alert.alert(
+                          "Error",
+                          result.error?.message ||
+                            "Failed to delete account. Please try again."
+                        );
+                      }
+                    } catch (error: any) {
+                      Alert.alert(
+                        "Error",
+                        error.message || "An unexpected error occurred"
+                      );
+                    } finally {
+                      setDeleting(false);
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <SafeAreaView
@@ -165,10 +209,29 @@ const Profile = () => {
         <Text style={[styles.title, { fontSize: 24, fontWeight: "bold" }]}>
           {hasCompleteProfile && profile.name ? profile.name : "Profile"}
         </Text>
-        {hasCompleteProfile && (
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {hasCompleteProfile && (
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.primary[500],
+                padding: 8,
+                borderRadius: 20,
+                width: 40,
+                height: 40,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              onPress={() => {
+                setShowUpdateSuccess(true);
+                navigation.navigate("EditProfile" as never);
+              }}
+            >
+              <Feather name="edit-2" size={18} color="white" />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={{
-              backgroundColor: colors.primary[500],
+              backgroundColor: colors.gray[200],
               padding: 8,
               borderRadius: 20,
               width: 40,
@@ -176,14 +239,11 @@ const Profile = () => {
               alignItems: "center",
               justifyContent: "center",
             }}
-            onPress={() => {
-              setShowUpdateSuccess(true);
-              navigation.navigate("EditProfile" as never);
-            }}
+            onPress={() => setShowSettings(true)}
           >
-            <Feather name="edit-2" size={18} color="white" />
+            <Feather name="settings" size={18} color={colors.gray[700]} />
           </TouchableOpacity>
-        )}
+        </View>
       </View>
 
       <View style={[styles.container, { paddingTop: 0 }]}>
@@ -211,6 +271,14 @@ const Profile = () => {
             {profile.zipCode && (
               <Text style={styles.info}>Zip Code: {profile.zipCode}</Text>
             )}
+            <TouchableOpacity>
+              <Text
+                style={{ color: colors.primary[500], textAlign: "center" }}
+                onPress={() => navigation.navigate("Checkout" as never)}
+              >
+                Checkout Screen Test
+              </Text>
+            </TouchableOpacity>
           </>
         ) : (
           <>
@@ -242,41 +310,241 @@ const Profile = () => {
                   Complete Profile
                 </Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={{
-                  backgroundColor: colors.gray[600],
-                  padding: 12,
-                  borderRadius: 8,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-                onPress={async () => {
-                  if (user) {
-                    console.log('🔍 Running Firestore debug...');
-                    await debugFirestoreData(user.uid);
-                  }
-                }}
-              >
-                <Feather
-                  name="search"
-                  size={18}
-                  color="white"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={{ color: "white", fontWeight: "bold" }}>
-                  Debug Database
-                </Text>
-              </TouchableOpacity>
             </View>
           </>
         )}
 
+        {/* View Mode Toggle for Mechanics */}
+        {profile?.role === "mechanic" && (
+          <View style={{ marginTop: 20, marginBottom: 20 }}>
+            <TouchableOpacity
+              style={{
+                backgroundColor:
+                  viewMode === "mechanic"
+                    ? colors.primary[500]
+                    : colors.gray[400],
+                padding: 12,
+                borderRadius: 8,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 12,
+              }}
+              onPress={toggleViewMode}
+            >
+              <Feather
+                name={viewMode === "mechanic" ? "user" : "truck"}
+                size={18}
+                color="white"
+                style={{ marginRight: 8 }}
+              />
+              <Text style={{ color: "white", fontWeight: "bold" }}>
+                {viewMode === "mechanic"
+                  ? "Switch to Customer View"
+                  : "Switch to Mechanic View"}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Driver Onboarding Button for Mechanics */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.accent[500],
+                padding: 12,
+                borderRadius: 8,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 12,
+              }}
+              onPress={() => navigation.navigate("DriverOnboarding" as never)}
+            >
+              <Feather
+                name="user-check"
+                size={18}
+                color="white"
+                style={{ marginRight: 8 }}
+              />
+              <Text style={{ color: "white", fontWeight: "bold" }}>
+                Complete Driver Onboarding
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={{ marginTop: "auto", paddingBottom: 20 }}>
+          <TouchableOpacity
+            style={{
+              backgroundColor: colors.primary[500],
+              padding: 12,
+              borderRadius: 8,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 12,
+            }}
+            onPress={() => navigation.navigate("Feedback" as never)}
+          >
+            <Feather
+              name="message-square"
+              size={18}
+              color="white"
+              style={{ marginRight: 8 }}
+            />
+            <Text style={{ color: "white", fontWeight: "bold" }}>
+              Send Feedback
+            </Text>
+          </TouchableOpacity>
+
           <Button title="Log Out" onPress={signOut} color="#d9534f" />
         </View>
       </View>
+
+      {/* Settings Modal */}
+      <Modal
+        visible={showSettings}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowSettings(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            justifyContent: "flex-start",
+            paddingTop: 80,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.white,
+              marginHorizontal: 20,
+              borderRadius: 12,
+              shadowColor: "#000",
+              shadowOffset: {
+                width: 0,
+                height: 2,
+              },
+              shadowOpacity: 0.25,
+              shadowRadius: 3.84,
+              elevation: 5,
+            }}
+          >
+            {/* Settings Header */}
+            <View
+              style={{
+                paddingHorizontal: 16,
+                paddingTop: 16,
+                paddingBottom: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.gray[200],
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "bold",
+                  color: colors.gray[900],
+                }}
+              >
+                Settings
+              </Text>
+              <TouchableOpacity onPress={() => setShowSettings(false)}>
+                <Feather name="x" size={24} color={colors.gray[600]} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Settings Menu Items */}
+            <View>
+              {/* Maintenance Configs - Placeholder for future */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.gray[100],
+                }}
+                onPress={() => {
+                  setShowSettings(false);
+                  // TODO: Navigate to maintenance configs
+                  Alert.alert(
+                    "Coming Soon",
+                    "Maintenance configurations will be available soon."
+                  );
+                }}
+              >
+                <Feather
+                  name="tool"
+                  size={18}
+                  color={colors.primary[500]}
+                  style={{ marginRight: 12 }}
+                />
+                <Text
+                  style={{
+                    fontSize: 16,
+                    color: colors.gray[900],
+                    flex: 1,
+                  }}
+                >
+                  Maintenance Configs
+                </Text>
+                <Feather
+                  name="chevron-right"
+                  size={18}
+                  color={colors.gray[400]}
+                />
+              </TouchableOpacity>
+
+              {/* Delete Account */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                }}
+                onPress={() => {
+                  setShowSettings(false);
+                  handleDeleteAccount();
+                }}
+              >
+                <Feather
+                  name="trash-2"
+                  size={18}
+                  color="#c9302c"
+                  style={{ marginRight: 12 }}
+                />
+                <Text
+                  style={{
+                    fontSize: 16,
+                    color: "#c9302c",
+                    flex: 1,
+                  }}
+                >
+                  Delete Account
+                </Text>
+                <Feather
+                  name="chevron-right"
+                  size={18}
+                  color={colors.gray[400]}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Tap outside to close */}
+          <TouchableOpacity
+            style={{
+              flex: 1,
+            }}
+            onPress={() => setShowSettings(false)}
+          />
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
