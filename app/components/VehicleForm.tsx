@@ -36,13 +36,13 @@ interface VehicleFormProps {
 
 // Fields that stay as free-text inputs
 const TEXT_FIELDS = [
-  { key: "mileage", label: "Mileage", required: false, numeric: true },
+  { key: "mileage", label: "Mileage", required: true, numeric: true },
   { key: "nickname", label: "Nickname", required: false },
   { key: "vin", label: "VIN", required: false, caps: "characters" as const, maxLength: 17 },
   { key: "engine", label: "Engine", required: false },
 ];
 
-const REQUIRED_FIELDS = ["year", "make", "model"];
+const REQUIRED_FIELDS = ["year", "make", "model", "mileage"];
 
 const DEFAULT_IMAGE =
   "https://firebasestorage.googleapis.com/v0/b/fluid-tangent-405719.firebasestorage.app/o/public%2Fcar_default.png?alt=media&token=5232adad-a5f7-4b8c-be47-781163a7eaa1";
@@ -286,11 +286,11 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
       const updatedForm = {
         ...form,
         year: form.year ? parseInt(form.year, 10) : undefined,
-        mileage: form.mileage ? parseInt(form.mileage, 10) : undefined,
+        mileage: form.mileage ? parseInt(form.mileage, 10) : null,
       };
       const defaultMaintConfig = {
-        milesBetweenOilChanges: 7500,
-        milesBetweenBrakeChangess: 50000,
+        milesBetweenOilChanges: 5000,
+        milesBetweenBrakeChangess: 7500,
         batteryInstallDate: null,
       };
       const result = await onSave(updatedForm, defaultMaintConfig, image);
