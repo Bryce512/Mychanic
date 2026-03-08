@@ -12,6 +12,8 @@ export type userProfile = {
   workAddress?: string | null;
   cars: number[] | null;
   role: "user" | "mechanic" | "admin" | null;
+  onboardingStatus?: "incomplete" | "pending" | "approved" | "rejected";
+  onboardingSubmittedAt?: Date | null;
 };
 
 export type vehicle = {

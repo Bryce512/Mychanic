@@ -1,0 +1,158 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.profile.role == 'admin';
+    }
+    
+    function isMechanic() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.profile.role == 'mechanic';
+    }
+    
+    function isUser() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.profile.role == 'user';
+    }
+    
+    function isVehicleOwner(vehicleId) {
+      let vehicle = get(/databases/$(database)/documents/vehicles/$(vehicleId)).data;
+      return isSignedIn() && request.auth.uid in vehicle.ownerId;
+    }
+    
+    function isJobOwner(jobId) {
+      let job = get(/databases/$(database)/documents/jobs/$(jobId)).data;
+      return isSignedIn() && request.auth.uid == job.ownerId;
+    }
+    
+    function isJobMechanic(jobId) {
+      let job = get(/databases/$(database)/documents/jobs/$(jobId)).data;
+      return isSignedIn() && request.auth.uid == job.mechanicId;
+    }
+    
+    // USERS collection
+    match /users/{userId} {
+      // Users can read and write their own data
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow admins to update any user (for onboarding status)
+      allow update: if request.auth != null && 
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.profile.role == 'admin';
+                       
+      // Admins can read all user data
+      allow read: if isAdmin();
+      
+      // Mechanics can read users they're assigned to
+      allow read: if isMechanic() &&
+        exists(/databases/$(database)/documents/mechanicAssignments/$(request.auth.uid)/users/$(userId));
+    }
+    
+    // VEHICLES collection
+    match /vehicles/{vehicleId} {
+      allow create: if isSignedIn() && (
+        request.resource.data.ownerId == request.auth.uid ||
+        (request.resource.data.ownerId is list && request.auth.uid in request.resource.data.ownerId)
+      );
+
+      allow read: if isSignedIn() && (
+        resource.data.owner == request.auth.uid ||
+        resource.data.ownerId == request.auth.uid ||
+        request.auth.uid in resource.data.get('ownerId', []) ||
+        request.auth.uid in resource.data.get('drivers', [])
+      );
+      
+      // Drivers and Owners can edit
+      allow update: if isSignedIn() && (
+        resource.data.owner == request.auth.uid ||
+        resource.data.ownerId == request.auth.uid ||
+        request.auth.uid in resource.data.get('ownerId', []) ||
+        (request.auth.uid in resource.data.get('drivers', []) &&
+         !request.resource.data.diff(resource.data).affectedKeys()
+           .hasAny(['ownerId', 'owner', 'drivers']))
+      );
+
+			// Only Owners can delete a vehicle
+      allow delete: if isSignedIn() && (
+        resource.data.owner == request.auth.uid ||
+        resource.data.ownerId == request.auth.uid ||
+        request.auth.uid in resource.data.get('ownerId', [])
+      );
+
+      allow read, write: if isAdmin();
+
+      allow read: if isMechanic() &&
+        exists(/databases/$(database)/documents/jobs/$(vehicleId)) &&
+        get(/databases/$(database)/documents/jobs/$(vehicleId)).data.mechanicId == request.auth.uid;
+    }
+    
+    // MECHANICASSIGNMENTS collection
+    match /mechanicAssignments/{mechanicId}/users/{userId} {
+      // Mechanics can read and write their own assignments
+      allow read, write: if isSignedIn() && request.auth.uid == mechanicId;
+      
+      // Admins can read and write all assignments
+      allow read, write: if isAdmin();
+    }
+    
+    // Mechanics collection - mechanics can create and update their own profile
+    match /mechanics/{mechanicId} {
+      // Allow mechanic to create and update their own profile
+      allow create: if request.auth != null && request.auth.uid == mechanicId;
+      allow update: if request.auth != null && 
+           (request.auth.uid == mechanicId ||
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.profile.role == 'admin');
+            
+      // Allow individual mechanic to read their own profile
+      allow get: if request.auth != null && request.auth.uid == mechanicId;
+      
+      // Allow admins to read individual profiles and query/list mechanics
+      allow get, list: if request.auth != null && 
+                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.profile.role == 'admin';
+    }
+    
+    // JOBS collection
+    match /jobs/{jobId} {
+      // Job owners can CRUD their own jobs
+      allow read, write: if isSignedIn() && request.auth.uid == resource.data.ownerId;
+      
+      // Assigned mechanics can read their assigned jobs
+      allow read: if isMechanic();
+      
+      // Assigned mechanics can update specific fields (status, claimedAt)
+      allow update: if isMechanic() && request.auth.uid == resource.data.mechanicId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'claimedAt']);
+      
+      // Admins can read and write all jobs
+      allow read, write: if isAdmin();
+    }
+    
+    // VEHICLE HISTORY collection
+    match /vehicleHistory/{vehicleId}/entries/{entryId} {
+      // Vehicle owners can read their vehicle history
+      allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/vehicles/$(vehicleId)).data.ownerId;
+      
+      // Vehicle owners can add entries (create)
+      allow create: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/vehicles/$(vehicleId)).data.ownerId;
+      
+      // Admins can read and write all vehicle history
+      allow read, write: if isAdmin();
+      
+      // Mechanics can read vehicle history for vehicles they have jobs for
+      allow read: if isMechanic() &&
+        exists(/databases/$(database)/documents/jobs/$(vehicleId)) &&
+        get(/databases/$(database)/documents/jobs/$(vehicleId)).data.mechanicId == request.auth.uid;
+    }
+    
+    // ADMIN NOTIFICATIONS collection
+    match /adminNotifications/{notificationId} {
+      // Only admins can read and write admin notifications
+      allow read, write: if isAdmin();
+    }
+    
+  }
+}

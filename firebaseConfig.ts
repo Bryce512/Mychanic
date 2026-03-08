@@ -20,7 +20,6 @@ const firebaseConfig = {
 if (!firebase.apps.length) {
   try {
     firebase.initializeApp(firebaseConfig);
-    console.log("Firebase initialized from firebaseConfig.ts");
   } catch (error: any) {
     // Handle case where app is already initialized
     if (!error.message?.includes("Default app has already been configured")) {

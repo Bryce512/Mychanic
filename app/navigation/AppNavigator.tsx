@@ -79,6 +79,8 @@ import RequestJobScreen from "../screens/RequestJob";
 import CheckoutScreen from "../screens/Checkout";
 import FullDiagnosticsScreen from "../screens/FullDiagnostics";
 import ShareVehicle from "../screens/ShareVehicle";
+import DriverOnboardingScreen from "../screens/driverOnBoarding";
+import AdminReviewMechanicsScreen from "../screens/AdminReviewMechanics";
 
 export type RootStackParamList = {
   Main: undefined;
@@ -108,6 +110,8 @@ export type RootStackParamList = {
   };
   FullDiagnostics: { vehicleId: string };
   ShareVehicle: undefined;
+  DriverOnboarding: undefined;
+  AdminReviewMechanics: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -146,9 +150,15 @@ function VehiclesStackScreen() {
 
 function MainTabs() {
   const { colors, isDark } = useTheme();
+  const { profile, viewMode } = useAuth();
+  const isMechanic = viewMode === "mechanic" && profile?.role === "mechanic";
+  const isAdmin = profile?.role === "admin";
 
   return (
     <Tab.Navigator
+      initialRouteName={
+        isMechanic || isAdmin ? "MechanicDashboard" : "Vehicles"
+      }
       screenOptions={{
         tabBarActiveTintColor: colors.primary[500],
         tabBarInactiveTintColor: isDark ? colors.gray[400] : colors.gray[500],
@@ -156,42 +166,69 @@ function MainTabs() {
           backgroundColor: isDark ? colors.gray[900] : colors.white,
           borderTopColor: isDark ? colors.gray[800] : colors.gray[200],
         },
-        headerShown: true, // Show headers on all tabs
+        headerShown: true,
         headerStyle: { backgroundColor: colors.primary[500] },
         headerTintColor: colors.white,
         headerTitleStyle: { fontWeight: "bold", fontSize: 20 },
       }}
     >
-      <Tab.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="home" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Vehicles"
-        component={VehiclesStackScreen}
-        options={{
-          headerShown: false, // Let the nested stack handle the header
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="truck" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="FindMechanics"
-        component={FindMechanicsScreen}
-        options={{
-          title: "Find Mechanics",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="search" size={size} color={color} />
-          ),
-        }}
-      />
+      {isMechanic || isAdmin ? (
+        <>
+          <Tab.Screen
+            name="MechanicDashboard"
+            component={MechanicDashboardScreen}
+            options={{
+              title: "Dashboard",
+              tabBarIcon: ({ color, size }) => (
+                <Feather name="grid" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tab.Screen
+            name="JobsList"
+            component={JobsListScreen}
+            options={{
+              title: "Jobs",
+              tabBarIcon: ({ color, size }) => (
+                <Feather name="briefcase" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tab.Screen
+            name="Vehicles"
+            component={VehiclesStackScreen}
+            options={{
+              headerShown: false,
+              tabBarIcon: ({ color, size }) => (
+                <Feather name="truck" size={size} color={color} />
+              ),
+            }}
+          />
+        </>
+      ) : (
+        <>
+          <Tab.Screen
+            name="FindMechanics"
+            component={FindMechanicsScreen}
+            options={{
+              title: "Find Mechanics",
+              tabBarIcon: ({ color, size }) => (
+                <Feather name="search" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tab.Screen
+            name="Vehicles"
+            component={VehiclesStackScreen}
+            options={{
+              headerShown: false,
+              tabBarIcon: ({ color, size }) => (
+                <Feather name="truck" size={size} color={color} />
+              ),
+            }}
+          />
+        </>
+      )}
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
@@ -213,18 +250,12 @@ export default function AppNavigator() {
   const { colors } = useTheme();
   const navigation = useNavigation();
 
-  // Navigate to appropriate screen when viewMode changes
+  // Navigate to Main tabs when user is authenticated
   React.useEffect(() => {
     if (user && !isLoading) {
-      if (viewMode === "user") {
-        // Navigate to Main tabs for user view
-        navigation.navigate("Main" as never);
-      } else if (viewMode === "mechanic" && profile?.role === "mechanic") {
-        // Navigate to MechanicDashboard for mechanic view
-        navigation.navigate("MechanicDashboard" as never);
-      }
+      navigation.navigate("Main" as never);
     }
-  }, [viewMode, user, isLoading, profile?.role, navigation]);
+  }, [viewMode, user, isLoading, navigation]);
 
   // Set global status bar for blue headers
   React.useEffect(() => {
@@ -232,15 +263,8 @@ export default function AppNavigator() {
   }, []);
 
   // Debug logging
-  console.log(
-    "AppNavigator render - user:",
-    user ? "logged in" : "not logged in",
-    "isLoading:",
-    isLoading,
-  );
 
   if (isLoading) {
-    console.log("Showing loading screen");
     return (
       <View
         style={{
@@ -265,24 +289,19 @@ export default function AppNavigator() {
     >
       {user ? (
         <>
-          {/* Main tabs for regular users - show when in user view */}
-          {viewMode === "user" && (
-            <Stack.Screen
-              name="Main"
-              component={MainTabs}
-              options={{ headerShown: false }}
-            />
-          )}
+          {/* Main tab navigator - always the initial screen */}
+          <Stack.Screen
+            name="Main"
+            component={MainTabs}
+            options={{ headerShown: false }}
+          />
 
-          {/* Mechanic-only screens - show when in mechanic view */}
-          {viewMode === "mechanic" && (
-            <Stack.Screen
-              name="MechanicDashboard"
-              component={MechanicDashboardScreen}
-              options={{ title: "Dashboard" }}
-            />
-          )}
-
+          {/* Stack screens accessible from within tabs */}
+          <Stack.Screen
+            name="MechanicDashboard"
+            component={MechanicDashboardScreen}
+            options={{ title: "Dashboard" }}
+          />
           {viewMode === "mechanic" && (
             <Stack.Screen
               name="JobsList"
@@ -298,19 +317,6 @@ export default function AppNavigator() {
             options={{ title: "Profile" }}
           />
 
-          {/* All authenticated users screens */}
-          <Stack.Screen
-            name="VehicleProfiles"
-            component={VehicleProfilesScreen}
-            options={{ title: "My Vehicles" }}
-          />
-          {viewMode === "mechanic" && (
-            <Stack.Screen
-              name="Main"
-              component={MainTabs}
-              options={{ headerShown: false }}
-            />
-          )}
           <Stack.Screen
             name="BookAppointment"
             component={BookAppointmentScreen}
@@ -382,6 +388,18 @@ export default function AppNavigator() {
             component={ShareVehicle}
             options={{ title: "Manage Drivers" }}
           />
+          <Stack.Screen
+            name="DriverOnboarding"
+            component={DriverOnboardingScreen}
+            options={{ title: "Mechanic Onboarding" }}
+          />
+          {hasRole(profile?.role, ["admin"]) && (
+            <Stack.Screen
+              name="AdminReviewMechanics"
+              component={AdminReviewMechanicsScreen}
+              options={{ title: "Review Mechanics" }}
+            />
+          )}
         </>
       ) : (
         <>

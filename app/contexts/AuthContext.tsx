@@ -1,5 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import type { FirebaseAuthTypes } from "@react-native-firebase/auth";
+import { getAuth } from "@react-native-firebase/auth";
+import {
+  getMessaging,
+  onTokenRefresh,
+  onNotificationOpenedApp,
+} from "@react-native-firebase/messaging";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import firebaseService, {
   getUserProfile,
@@ -8,6 +14,16 @@ import firebaseService, {
   signInWithGoogle,
   signInWithApple,
 } from "../services/firebaseService";
+import notifee, { EventType } from "@notifee/react-native";
+import {
+  requestPermissions,
+  getFCMToken,
+  saveFCMToken,
+  setupForegroundHandler,
+  setupNotificationCategories,
+  handleNotifeeEvent,
+  navigateToVehicleEdit,
+} from "../services/notificationService";
 import * as types from "../../types";
 
 type AuthContextType = {
@@ -40,7 +56,9 @@ type AuthContextType = {
   toggleViewMode: () => void;
 };
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(
+  undefined,
+);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
@@ -76,10 +94,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Also listen to Firebase auth state changes
     const unsubscribe = firebaseService.onAuthChange(async (firebaseUser) => {
-      console.log(
-        "Auth state changed:",
-        firebaseUser ? "logged in" : "logged out",
-      );
       if (firebaseUser) {
         // User is logged in
         setUser(firebaseUser);
@@ -90,6 +104,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error("Error loading profile:", error);
           setProfile(null);
         }
+
+        // Initialize push notifications
+        try {
+          const granted = await requestPermissions();
+          if (granted) {
+            const token = await getFCMToken();
+            if (token) {
+              await saveFCMToken(firebaseUser.uid, token);
+            }
+          }
+        } catch (error) {
+          console.error("Error initializing notifications:", error);
+        }
       } else {
         // User is logged out
         setUser(null);
@@ -99,7 +126,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    return () => unsubscribe();
+    // Keep the FCM token up to date if it refreshes
+    const unsubscribeTokenRefresh = onTokenRefresh(
+      getMessaging(),
+      async (newToken) => {
+        const currentUser = getAuth().currentUser;
+        if (currentUser?.uid) {
+          await saveFCMToken(currentUser.uid, newToken).catch(console.error);
+        }
+      },
+    );
+
+    // Display FCM messages when the app is in the foreground
+    const unsubscribeForeground = setupForegroundHandler();
+
+    // Register iOS notification categories (enables text-input action button)
+    setupNotificationCategories().catch(console.error);
+
+    // Handle notifee press/action events while the app is in the foreground
+    const unsubscribeNotifeePress = notifee.onForegroundEvent(
+      ({ type, detail }) => {
+        handleNotifeeEvent(
+          type,
+          detail as Parameters<typeof handleNotifeeEvent>[1],
+        ).catch(console.error);
+      },
+    );
+
+    // FCM notification tapped while app was in background (not quit)
+    const unsubscribeOpenedApp = onNotificationOpenedApp(
+      getMessaging(),
+      (remoteMessage) => {
+        console.log(
+          "[Notification] onNotificationOpenedApp data:",
+          JSON.stringify(remoteMessage.data),
+        );
+        if (remoteMessage.data?.vehicleId) {
+          navigateToVehicleEdit(remoteMessage.data.vehicleId as string).catch(
+            console.error,
+          );
+        }
+      },
+    );
+
+    return () => {
+      unsubscribe();
+      unsubscribeTokenRefresh();
+      unsubscribeForeground();
+      unsubscribeNotifeePress();
+      unsubscribeOpenedApp();
+    };
   }, []);
 
   // Update viewMode when profile changes

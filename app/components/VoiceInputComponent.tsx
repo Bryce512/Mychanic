@@ -43,11 +43,6 @@ export default function VoiceInputComponent({
     if (value !== internalText) {
       setInternalText(value || "");
       baseTextRef.current = value || "";
-      console.log("=== SYNCING INTERNAL TEXT ===");
-      console.log("External value:", JSON.stringify(value));
-      console.log("Setting internal text to:", JSON.stringify(value || ""));
-      console.log("Setting baseTextRef to:", JSON.stringify(value || ""));
-      console.log("============================");
     }
   }, [value]);
 
@@ -72,11 +67,6 @@ export default function VoiceInputComponent({
     setIsListening(true);
     // Set the base text from current internal text at start of recording
     baseTextRef.current = internalText;
-    console.log("=== SPEECH START ===");
-    console.log("Current value prop:", value);
-    console.log("Current internal text:", internalText);
-    console.log("Setting baseTextRef to:", baseTextRef.current);
-    console.log("==================");
   };
 
   const onSpeechRecognized = (e: any) => {
@@ -86,7 +76,6 @@ export default function VoiceInputComponent({
   const onSpeechEnd = (e: any) => {
     setIsListening(false);
     stopPulseAnimation();
-    console.log("Speech ended");
   };
 
   const onSpeechError = (e: any) => {
@@ -108,12 +97,6 @@ export default function VoiceInputComponent({
         const baseText = baseTextRef.current;
         const separator = baseText && baseText.trim() ? " " : "";
         const newText = `${baseText}${separator}${recognizedText.trim()}`;
-        console.log("=== SPEECH RESULTS ===");
-        console.log("Base text (ref):", JSON.stringify(baseText));
-        console.log("New speech:", JSON.stringify(recognizedText.trim()));
-        console.log("Combined:", JSON.stringify(newText));
-        console.log("====================");
-
         const finalText = newText.substring(0, maxLength);
         setInternalText(finalText);
         onTextChange(finalText);
@@ -131,11 +114,6 @@ export default function VoiceInputComponent({
         const baseText = baseTextRef.current;
         const separator = baseText && baseText.trim() ? " " : "";
         const newText = `${baseText}${separator}${partialText.trim()}`;
-        console.log("=== PARTIAL RESULTS ===");
-        console.log("Base text (ref):", JSON.stringify(baseText));
-        console.log("Partial text:", JSON.stringify(partialText.trim()));
-        console.log("Combined:", JSON.stringify(newText));
-        console.log("====================");
 
         // For partial results, only update display, don't update internal state
         onTextChange(newText.substring(0, maxLength));
@@ -236,7 +214,6 @@ export default function VoiceInputComponent({
     }
     setIsListening(false);
     stopPulseAnimation();
-    console.log("Voice recognition manually stopped");
   };
 
   // Handle voice input toggle
