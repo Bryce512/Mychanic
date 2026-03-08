@@ -84,7 +84,7 @@ class VehicleDataService {
     try {
       // Use GetMakesForVehicleType to get actual makes (brand names)
       const response = await fetch(
-        `${this.baseUrl}/GetMakesForVehicleType/car?${this.formatParam}`
+        `${this.baseUrl}/GetMakesForVehicleType/car?${this.formatParam}`,
       );
 
       if (!response.ok) {
@@ -92,27 +92,24 @@ class VehicleDataService {
       }
 
       const data = await response.json();
-      console.log("NHTSA Makes Response:", JSON.stringify(data, null, 2));
 
       // The API returns makes (brand names like Chevrolet, Ford, Honda)
       let makes: VehicleMake[] = data.Results || [];
-      console.log("Raw makes count:", makes.length);
 
-      // Filter out makes with invalid names and sort alphabetically
+      // Filter out invalid names, deduplicate by name, and sort alphabetically
+      const seenNames = new Set<string>();
       makes = makes
-        .filter(
-          (make: VehicleMake) =>
-            make.MakeName && typeof make.MakeName === "string"
-        )
+        .filter((make: VehicleMake) => {
+          const name = make.MakeName?.trim();
+          if (!name || typeof name !== "string") return false;
+          const key = name.toUpperCase();
+          if (seenNames.has(key)) return false;
+          seenNames.add(key);
+          return true;
+        })
         .sort((a: VehicleMake, b: VehicleMake) =>
-          a.MakeName!.localeCompare(b.MakeName!)
+          a.MakeName!.localeCompare(b.MakeName!),
         );
-
-      console.log("Filtered makes count:", makes.length);
-      console.log(
-        "First 5 makes:",
-        makes.slice(0, 5).map((m) => m.MakeName)
-      );
 
       this.makeCache.set(cacheKey, makes);
       return makes;
@@ -127,7 +124,7 @@ class VehicleDataService {
    */
   async getVehicleModels(
     makeName: string,
-    year: number
+    year: number,
   ): Promise<VehicleModel[]> {
     const cacheKey = `${makeName}-${year}`;
     if (this.modelCache.has(cacheKey)) {
@@ -138,8 +135,8 @@ class VehicleDataService {
       // Use the correct NHTSA API endpoint format
       const response = await fetch(
         `${this.baseUrl}/GetModelsForMakeYear/make/${encodeURIComponent(
-          makeName
-        )}/modelyear/${year}?${this.formatParam}`
+          makeName,
+        )}/modelyear/${year}?${this.formatParam}`,
       );
 
       if (!response.ok) {
@@ -148,28 +145,24 @@ class VehicleDataService {
       }
 
       const data = await response.json();
-      console.log("NHTSA Models Response:", JSON.stringify(data, null, 2));
       let models: VehicleModel[] = data.Results || [];
-      console.log("Raw models count:", models.length);
 
-      // Filter out models with invalid names and sort alphabetically
+      // Filter out invalid names, deduplicate by name, and sort alphabetically
+      const seenModels = new Set<string>();
       models = models
-        .filter(
-          (model: VehicleModel) =>
-            (model.Model_Name && typeof model.Model_Name === "string") ||
-            (model.ModelName && typeof model.ModelName === "string")
-        )
+        .filter((model: VehicleModel) => {
+          const name = (model.Model_Name || model.ModelName)?.trim();
+          if (!name || typeof name !== "string") return false;
+          const key = name.toUpperCase();
+          if (seenModels.has(key)) return false;
+          seenModels.add(key);
+          return true;
+        })
         .sort((a: VehicleModel, b: VehicleModel) => {
           const aName = a.Model_Name || a.ModelName || "";
           const bName = b.Model_Name || b.ModelName || "";
           return aName.localeCompare(bName);
         });
-
-      console.log("Filtered models count:", models.length);
-      console.log(
-        "First 5 models:",
-        models.slice(0, 5).map((m) => m.Model_Name || m.ModelName)
-      );
 
       this.modelCache.set(cacheKey, models);
       return models;
@@ -193,7 +186,7 @@ class VehicleDataService {
     return allMakes
       .filter(
         (make) =>
-          make.MakeName && make.MakeName.toLowerCase().includes(searchTerm)
+          make.MakeName && make.MakeName.toLowerCase().includes(searchTerm),
       )
       .slice(0, 10); // Limit to 10 results
   }
@@ -204,7 +197,7 @@ class VehicleDataService {
   async searchModels(
     query: string,
     makeName: string,
-    year: number
+    year: number,
   ): Promise<VehicleModel[]> {
     const allModels = await this.getVehicleModels(makeName, year);
 
@@ -227,12 +220,12 @@ class VehicleDataService {
   async getVehicleSpecifications(
     make: string,
     model: string,
-    year: number
+    year: number,
   ): Promise<any> {
     try {
       // Try to get specifications using the WMI/VDS approach
       const response = await fetch(
-        `${this.baseUrl}/DecodeVINValues/5UXFE83578L342934?${this.formatParam}` // Example VIN for testing
+        `${this.baseUrl}/DecodeVINValues/5UXFE83578L342934?${this.formatParam}`, // Example VIN for testing
       );
 
       if (!response.ok) {
@@ -255,7 +248,7 @@ class VehicleDataService {
   async getDetailedVehicleInfo(vin: string): Promise<any> {
     try {
       const response = await fetch(
-        `${this.baseUrl}/DecodeVin/${vin}?${this.formatParam}`
+        `${this.baseUrl}/DecodeVin/${vin}?${this.formatParam}`,
       );
 
       if (!response.ok) {
@@ -288,7 +281,7 @@ class VehicleDataService {
   async getVehicleByVin(vin: string): Promise<any> {
     try {
       const response = await fetch(
-        `${this.baseUrl}/DecodeVin/${vin}?${this.formatParam}`
+        `${this.baseUrl}/DecodeVin/${vin}?${this.formatParam}`,
       );
 
       if (!response.ok) {
@@ -309,7 +302,7 @@ class VehicleDataService {
   async getVehicleVariables(): Promise<any[]> {
     try {
       const response = await fetch(
-        `${this.baseUrl}/GetVehicleVariableList?${this.formatParam}`
+        `${this.baseUrl}/GetVehicleVariableList?${this.formatParam}`,
       );
 
       if (!response.ok) {
@@ -319,7 +312,7 @@ class VehicleDataService {
       const data = await response.json();
       console.log(
         "Available Vehicle Variables:",
-        JSON.stringify(data, null, 2)
+        JSON.stringify(data, null, 2),
       );
       return data.Results || [];
     } catch (error) {

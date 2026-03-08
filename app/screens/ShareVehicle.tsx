@@ -49,12 +49,9 @@ interface Vehicle {
   model: string;
   year: string;
   vin?: string;
-  // new format
-  owner?: string;
-  drivers?: string[];
+  ownerId: string[];
+  drivers: string[];
   driverProfiles?: Record<string, { name: string; maskedEmail: string }>;
-  // legacy
-  ownerId?: string | string[];
 }
 
 interface DriverProfile {
@@ -63,17 +60,11 @@ interface DriverProfile {
   maskedEmail: string;
 }
 
-const isPrimaryOwner = (vehicle: Vehicle, uid: string): boolean => {
-  if (vehicle.owner) return vehicle.owner === uid;
-  if (Array.isArray(vehicle.ownerId)) return vehicle.ownerId[0] === uid;
-  return vehicle.ownerId === uid;
-};
+const isPrimaryOwner = (vehicle: Vehicle, uid: string): boolean =>
+  Array.isArray(vehicle.ownerId) && vehicle.ownerId.includes(uid);
 
-const getDriverUids = (vehicle: Vehicle): string[] => {
-  if (vehicle.drivers && vehicle.drivers.length > 0) return vehicle.drivers;
-  if (Array.isArray(vehicle.ownerId)) return vehicle.ownerId.slice(1);
-  return [];
-};
+const getDriverUids = (vehicle: Vehicle): string[] =>
+  vehicle.drivers ?? [];
 
 export default function ManageDrivers() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
@@ -149,10 +140,9 @@ export default function ManageDrivers() {
           model: v.model || "Unknown",
           year: v.year || "N/A",
           vin: v.vin,
-          owner: v.owner,
-          drivers: v.drivers,
+          ownerId: v.ownerId ?? v.owner ?? "",
+          drivers: Array.isArray(v.drivers) ? v.drivers : [],
           driverProfiles: v.driverProfiles,
-          ownerId: v.ownerId,
         }))
       );
     } catch {
