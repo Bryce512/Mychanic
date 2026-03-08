@@ -115,7 +115,6 @@ export default function VehicleProfilesScreen() {
               }
             }
           } catch (cacheError) {
-            console.log("Cache read error (non-critical):", cacheError);
           }
         }
 
@@ -136,7 +135,6 @@ export default function VehicleProfilesScreen() {
             JSON.stringify(cacheData),
           );
         } catch (cacheError) {
-          console.log("Cache write error (non-critical):", cacheError);
         }
 
         // Reset selected vehicle if out of range

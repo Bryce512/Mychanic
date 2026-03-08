@@ -17,7 +17,7 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.bryce512.Mychanic",
-      googleServicesFile: "./GoogleService-Info.plist",
+      googleServicesFile: "./ios/Mychanic/GoogleService-Info.plist",
       infoPlist: {
         NSBluetoothAlwaysUsageDescription:
           "This app uses Bluetooth to connect to your OBD-II device.",
@@ -27,7 +27,9 @@ export default {
           "This app uses location to find nearby mechanics and services.",
         NSLocationAlwaysAndWhenInUseUsageDescription:
           "This app uses location to find nearby mechanics and services.",
-        UIBackgroundModes: ["bluetooth-central"],
+        NSUserNotificationUsageDescription:
+          "Mychanic sends reminders to keep your vehicle mileage up to date.",
+        UIBackgroundModes: ["bluetooth-central", "remote-notification"],
       },
     },
     android: {
@@ -45,6 +47,8 @@ export default {
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
       ],
     },
     web: {
@@ -53,6 +57,7 @@ export default {
     plugins: [
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
+      "@react-native-firebase/messaging",
       "react-native-ble-manager",
       [
         "expo-location",
@@ -78,7 +83,9 @@ export default {
                 "This app uses location to find nearby mechanics and services.",
               NSLocationAlwaysAndWhenInUseUsageDescription:
                 "This app uses location to find nearby mechanics and services.",
-              UIBackgroundModes: ["bluetooth-central"],
+              NSUserNotificationUsageDescription:
+                "Mychanic sends reminders to keep your vehicle mileage up to date.",
+              UIBackgroundModes: ["bluetooth-central", "remote-notification"],
             },
           },
           android: {
@@ -89,6 +96,8 @@ export default {
               "android.permission.BLUETOOTH_SCAN",
               "android.permission.ACCESS_FINE_LOCATION",
               "android.permission.ACCESS_COARSE_LOCATION",
+              "android.permission.POST_NOTIFICATIONS",
+              "android.permission.RECEIVE_BOOT_COMPLETED",
             ],
           },
         },

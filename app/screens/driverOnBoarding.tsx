@@ -1,351 +1,725 @@
-// "use client"
+import React, { useState, useContext } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Alert,
+  ActivityIndicator,
+  Platform,
+  Linking,
+  Share,
+} from "react-native";
+import { launchImageLibrary, launchCamera } from "react-native-image-picker";
+import DocumentPicker from "react-native-document-picker";
+import { AuthContext } from "../contexts/AuthContext";
+import {
+  uploadMechanicDocument,
+  saveMechanicProfile,
+} from "../services/firebaseService";
 
-// import { useState } from "react"
-// import { Button } from "@/components/ui/button"
-// import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-// import { Input } from "@/components/ui/input"
-// import { Label } from "@/components/ui/label"
-// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-// import { Textarea } from "@/components/ui/textarea"
-// import { CheckCircle, ChevronRight, Car, User, CreditCard, UploadCloud } from "lucide-react"
-// import Link from "next/link"
+type DocumentType = "insurance" | "identity" | "tax" | "business";
 
-// export default function DriverOnboarding() {
-//   const [step, setStep] = useState(1)
-//   const [progress, setProgress] = useState(25)
+interface UploadedDocument {
+  uri: string;
+  name: string;
+  type: string;
+  storagePath?: string;
+}
 
-//   const nextStep = () => {
-//     if (step < 4) {
-//       setStep(step + 1)
-//       setProgress((step + 1) * 25)
-//     }
-//   }
+interface Documents {
+  insuranceCert?: UploadedDocument;
+  driversLicense?: UploadedDocument;
+  w9?: UploadedDocument;
+  businessReg?: UploadedDocument;
+}
 
-//   const prevStep = () => {
-//     if (step > 1) {
-//       setStep(step - 1)
-//       setProgress((step - 1) * 25)
-//     }
-//   }
+export default function DriverOnboarding({ navigation }: any) {
+  const authContext = useContext(AuthContext);
+  const user = authContext?.user;
 
-//   return (
-//     <div className="container px-4 py-8 md:px-6 md:py-12">
-//       <div className="mx-auto max-w-3xl">
-//         <div className="mb-8 text-center">
-//           <h1 className="text-3xl font-bold tracking-tight">Driver Onboarding</h1>
-//           <p className="mt-2 text-muted-foreground">Complete your profile to get started with Mychanic</p>
-//         </div>
+  const [businessName, setBusinessName] = useState("");
+  const [insuranceExpiry, setInsuranceExpiry] = useState("");
+  const [email, setEmail] = useState(user?.email || "");
+  const [name, setName] = useState(user?.displayName || "");
+  const [phone, setPhone] = useState(user?.phoneNumber || "");
+  const [documents, setDocuments] = useState<Documents>({});
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string>("");
 
-//         {/* Progress Bar */}
-//         <div className="mb-8 w-full">
-//           <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
-//             <div className="absolute h-full bg-primary transition-all" style={{ width: `${progress}%` }}></div>
-//           </div>
-//           <div className="mt-2 flex justify-between text-xs">
-//             <div className={step >= 1 ? "font-medium text-primary" : "text-muted-foreground"}>Account</div>
-//             <div className={step >= 2 ? "font-medium text-primary" : "text-muted-foreground"}>Vehicle</div>
-//             <div className={step >= 3 ? "font-medium text-primary" : "text-muted-foreground"}>Payment</div>
-//             <div className={step >= 4 ? "font-medium text-primary" : "text-muted-foreground"}>Complete</div>
-//           </div>
-//         </div>
+  // Send documents via email
+  const handleEmailDocuments = async () => {
+    // Prepare email content
+    const businessInfo = businessName.trim() ? businessName : "[Not provided]";
+    const insuranceInfo = insuranceExpiry.trim()
+      ? insuranceExpiry
+      : "[Not provided]";
+    const userEmail = user?.email || "[Not provided]";
+    const userId = user?.uid || "[Not provided]";
 
-//         {/* Step 1: Account Information */}
-//         {step === 1 && (
-//           <Card>
-//             <CardHeader>
-//               <CardTitle className="flex items-center gap-2">
-//                 <User className="h-5 w-5 text-primary" />
-//                 Account Information
-//               </CardTitle>
-//               <CardDescription>Set up your profile and preferences</CardDescription>
-//             </CardHeader>
-//             <CardContent className="space-y-4">
-//               <div className="grid gap-4 md:grid-cols-2">
-//                 <div className="space-y-2">
-//                   <Label htmlFor="first-name">First Name</Label>
-//                   <Input id="first-name" placeholder="Enter your first name" />
-//                 </div>
-//                 <div className="space-y-2">
-//                   <Label htmlFor="last-name">Last Name</Label>
-//                   <Input id="last-name" placeholder="Enter your last name" />
-//                 </div>
-//               </div>
-//               <div className="space-y-2">
-//                 <Label htmlFor="email">Email Address</Label>
-//                 <Input id="email" type="email" placeholder="Enter your email address" />
-//               </div>
-//               <div className="space-y-2">
-//                 <Label htmlFor="phone">Phone Number</Label>
-//                 <Input id="phone" type="tel" placeholder="Enter your phone number" />
-//               </div>
-//               <div className="space-y-2">
-//                 <Label htmlFor="zip">Zip Code</Label>
-//                 <Input id="zip" placeholder="Enter your zip code" />
-//               </div>
-//               <div className="space-y-2">
-//                 <Label htmlFor="password">Create Password</Label>
-//                 <Input id="password" type="password" placeholder="Create a secure password" />
-//               </div>
-//               <div className="space-y-2">
-//                 <Label htmlFor="confirm-password">Confirm Password</Label>
-//                 <Input id="confirm-password" type="password" placeholder="Confirm your password" />
-//               </div>
-//             </CardContent>
-//             <CardFooter className="flex justify-between">
-//               <Button variant="outline" asChild>
-//                 <Link href="/">Cancel</Link>
-//               </Button>
-//               <Button onClick={nextStep}>
-//                 Continue <ChevronRight className="ml-2 h-4 w-4" />
-//               </Button>
-//             </CardFooter>
-//           </Card>
-//         )}
+    const emailSubject = encodeURIComponent(
+      `Mechanic Onboarding Documents - ${businessInfo}`,
+    );
 
-//         {/* Step 2: Vehicle Information */}
-//         {step === 2 && (
-//           <Card>
-//             <CardHeader>
-//               <CardTitle className="flex items-center gap-2">
-//                 <Car className="h-5 w-5 text-primary" />
-//                 Vehicle Information
-//               </CardTitle>
-//               <CardDescription>Add your vehicle details</CardDescription>
-//             </CardHeader>
-//             <CardContent className="space-y-4">
-//               <Tabs defaultValue="manual" className="w-full">
-//                 <TabsList className="grid w-full grid-cols-2">
-//                   <TabsTrigger value="manual">Enter Manually</TabsTrigger>
-//                   <TabsTrigger value="obd">Connect OBD-II</TabsTrigger>
-//                 </TabsList>
-//                 <TabsContent value="manual" className="space-y-4 pt-4">
-//                   <div className="grid gap-4 md:grid-cols-2">
-//                     <div className="space-y-2">
-//                       <Label htmlFor="year">Year</Label>
-//                       <Select>
-//                         <SelectTrigger id="year">
-//                           <SelectValue placeholder="Select year" />
-//                         </SelectTrigger>
-//                         <SelectContent>
-//                           {[...Array(30)].map((_, i) => (
-//                             <SelectItem key={i} value={(new Date().getFullYear() - i).toString()}>
-//                               {new Date().getFullYear() - i}
-//                             </SelectItem>
-//                           ))}
-//                         </SelectContent>
-//                       </Select>
-//                     </div>
-//                     <div className="space-y-2">
-//                       <Label htmlFor="make">Make</Label>
-//                       <Select>
-//                         <SelectTrigger id="make">
-//                           <SelectValue placeholder="Select make" />
-//                         </SelectTrigger>
-//                         <SelectContent>
-//                           <SelectItem value="toyota">Toyota</SelectItem>
-//                           <SelectItem value="honda">Honda</SelectItem>
-//                           <SelectItem value="ford">Ford</SelectItem>
-//                           <SelectItem value="chevrolet">Chevrolet</SelectItem>
-//                           <SelectItem value="bmw">BMW</SelectItem>
-//                           <SelectItem value="mercedes">Mercedes-Benz</SelectItem>
-//                           <SelectItem value="audi">Audi</SelectItem>
-//                           <SelectItem value="other">Other</SelectItem>
-//                         </SelectContent>
-//                       </Select>
-//                     </div>
-//                   </div>
-//                   <div className="grid gap-4 md:grid-cols-2">
-//                     <div className="space-y-2">
-//                       <Label htmlFor="model">Model</Label>
-//                       <Input id="model" placeholder="Enter model" />
-//                     </div>
-//                     <div className="space-y-2">
-//                       <Label htmlFor="trim">Trim (Optional)</Label>
-//                       <Input id="trim" placeholder="Enter trim" />
-//                     </div>
-//                   </div>
-//                   <div className="grid gap-4 md:grid-cols-2">
-//                     <div className="space-y-2">
-//                       <Label htmlFor="mileage">Current Mileage</Label>
-//                       <Input id="mileage" type="number" placeholder="Enter mileage" />
-//                     </div>
-//                     <div className="space-y-2">
-//                       <Label htmlFor="vin">VIN (Optional)</Label>
-//                       <Input id="vin" placeholder="Enter VIN number" />
-//                     </div>
-//                   </div>
-//                   <div className="space-y-2">
-//                     <Label htmlFor="issues">Known Issues (Optional)</Label>
-//                     <Textarea id="issues" placeholder="Describe any known issues with your vehicle" className="h-20" />
-//                   </div>
-//                 </TabsContent>
-//                 <TabsContent value="obd" className="pt-4">
-//                   <div className="rounded-lg border p-6 text-center space-y-4">
-//                     <div className="flex justify-center">
-//                       <Car className="h-12 w-12 text-primary" />
-//                     </div>
-//                     <h3 className="text-lg font-medium">Connect OBD-II Scanner</h3>
-//                     <p className="text-sm text-muted-foreground mx-auto max-w-md">
-//                       Connect your OBD-II scanner to your vehicle and sync with our app to automatically populate your
-//                       vehicle details and provide mechanics with diagnostic information.
-//                     </p>
-//                     <div className="pt-4">
-//                       <Button>Connect OBD-II Device</Button>
-//                     </div>
-//                     <p className="text-xs text-muted-foreground">
-//                       Compatible with most Bluetooth OBD-II scanners. You can also add your vehicle manually.
-//                     </p>
-//                   </div>
-//                 </TabsContent>
-//               </Tabs>
-//               <div className="flex items-center gap-2 pt-4">
-//                 <Button variant="outline" className="w-full">
-//                   <UploadCloud className="mr-2 h-4 w-4" />
-//                   Upload Vehicle Photos (Optional)
-//                 </Button>
-//               </div>
-//             </CardContent>
-//             <CardFooter className="flex justify-between">
-//               <Button variant="outline" onClick={prevStep}>
-//                 Back
-//               </Button>
-//               <Button onClick={nextStep}>
-//                 Continue <ChevronRight className="ml-2 h-4 w-4" />
-//               </Button>
-//             </CardFooter>
-//           </Card>
-//         )}
+    const emailBody = encodeURIComponent(
+      `Hello Mychanic Team,\n\n` +
+        `I am submitting my mechanic onboarding documents.\n\n` +
+        `Business Name: ${businessInfo}\n` +
+        `Insurance Expiry: ${insuranceInfo}\n` +
+        `User ID: ${userId}\n` +
+        `Email: ${userEmail}\n\n` +
+        `Please find the following documents attached:\n` +
+        `1. Insurance Certificate\n` +
+        `2. Driver's License\n` +
+        `3. W9 Tax Form\n` +
+        `4. Business Registration (if available)\n\n` +
+        `Best regards`,
+    );
 
-//         {/* Step 3: Payment Information */}
-//         {step === 3 && (
-//           <Card>
-//             <CardHeader>
-//               <CardTitle className="flex items-center gap-2">
-//                 <CreditCard className="h-5 w-5 text-primary" />
-//                 Payment Information
-//               </CardTitle>
-//               <CardDescription>Add a payment method (optional)</CardDescription>
-//             </CardHeader>
-//             <CardContent className="space-y-4">
-//               <div className="rounded-lg border p-4">
-//                 <p className="text-sm text-muted-foreground">
-//                   Adding a payment method is optional. You can skip this step and add payment details later when booking
-//                   your first appointment.
-//                 </p>
-//               </div>
-//               <div className="space-y-2">
-//                 <Label htmlFor="card-name">Name on Card</Label>
-//                 <Input id="card-name" placeholder="Enter name as it appears on card" />
-//               </div>
-//               <div className="space-y-2">
-//                 <Label htmlFor="card-number">Card Number</Label>
-//                 <Input id="card-number" placeholder="0000 0000 0000 0000" />
-//               </div>
-//               <div className="grid gap-4 md:grid-cols-3">
-//                 <div className="space-y-2 md:col-span-1">
-//                   <Label htmlFor="expiry-month">Expiry Month</Label>
-//                   <Select>
-//                     <SelectTrigger id="expiry-month">
-//                       <SelectValue placeholder="MM" />
-//                     </SelectTrigger>
-//                     <SelectContent>
-//                       {[...Array(12)].map((_, i) => (
-//                         <SelectItem key={i} value={(i + 1).toString().padStart(2, "0")}>
-//                           {(i + 1).toString().padStart(2, "0")}
-//                         </SelectItem>
-//                       ))}
-//                     </SelectContent>
-//                   </Select>
-//                 </div>
-//                 <div className="space-y-2 md:col-span-1">
-//                   <Label htmlFor="expiry-year">Expiry Year</Label>
-//                   <Select>
-//                     <SelectTrigger id="expiry-year">
-//                       <SelectValue placeholder="YY" />
-//                     </SelectTrigger>
-//                     <SelectContent>
-//                       {[...Array(10)].map((_, i) => {
-//                         const year = (new Date().getFullYear() + i).toString().slice(2)
-//                         return (
-//                           <SelectItem key={i} value={year}>
-//                             {year}
-//                           </SelectItem>
-//                         )
-//                       })}
-//                     </SelectContent>
-//                   </Select>
-//                 </div>
-//                 <div className="space-y-2 md:col-span-1">
-//                   <Label htmlFor="cvv">CVV</Label>
-//                   <Input id="cvv" placeholder="123" />
-//                 </div>
-//               </div>
-//               <div className="space-y-2">
-//                 <Label htmlFor="billing-zip">Billing Zip Code</Label>
-//                 <Input id="billing-zip" placeholder="Enter billing zip code" />
-//               </div>
-//             </CardContent>
-//             <CardFooter className="flex justify-between">
-//               <Button variant="outline" onClick={prevStep}>
-//                 Back
-//               </Button>
-//               <div className="flex gap-2">
-//                 <Button variant="outline" onClick={nextStep}>
-//                   Skip for Now
-//                 </Button>
-//                 <Button onClick={nextStep}>Save & Continue</Button>
-//               </div>
-//             </CardFooter>
-//           </Card>
-//         )}
+    const mailtoUrl = `mailto:getmychanic@gmail.com?subject=${emailSubject}&body=${emailBody}`;
 
-//         {/* Step 4: Complete */}
-//         {step === 4 && (
-//           <Card>
-//             <CardHeader>
-//               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-//                 <CheckCircle className="h-6 w-6 text-green-600" />
-//               </div>
-//               <CardTitle className="text-center">Registration Complete!</CardTitle>
-//               <CardDescription className="text-center">Your account has been created successfully</CardDescription>
-//             </CardHeader>
-//             <CardContent className="space-y-4 text-center">
-//               <p className="text-muted-foreground">
-//                 Thank you for joining Mychanic. You can now find and book appointments with trusted mechanics in your
-//                 area.
-//               </p>
-//               <div className="rounded-lg border p-4 space-y-3">
-//                 <h3 className="font-medium">Download our mobile app</h3>
-//                 <p className="text-sm text-muted-foreground">
-//                   Get the full Mychanic experience on your mobile device. Connect OBD-II devices, receive real-time
-//                   updates, and manage your appointments on the go.
-//                 </p>
-//                 <div className="flex justify-center gap-2">
-//                   <Button variant="outline" className="w-32">
-//                     App Store
-//                   </Button>
-//                   <Button variant="outline" className="w-32">
-//                     Google Play
-//                   </Button>
-//                 </div>
-//               </div>
-//             </CardContent>
-//             <CardFooter className="flex justify-center gap-4">
-//               <Link href="/find-mechanics">
-//                 <Button>Find Mechanics</Button>
-//               </Link>
-//               <Link href="/vehicle-profiles">
-//                 <Button variant="outline">
-//                   <Car className="mr-2 h-4 w-4" />
-//                   View Vehicle Profile
-//                 </Button>
-//               </Link>
-//             </CardFooter>
-//           </Card>
-//         )}
-//       </div>
-//     </div>
-//   )
-// }
+    try {
+      const canOpen = await Linking.canOpenURL(mailtoUrl);
+      if (canOpen) {
+        await Linking.openURL(mailtoUrl);
+      } else {
+        Alert.alert(
+          "Email Not Available",
+          "Please send your documents to: getmychanic@gmail.com",
+        );
+      }
+    } catch (error) {
+      console.error("Error opening email:", error);
+      Alert.alert(
+        "Error",
+        "Could not open email client. Please manually send documents to getmychanic@gmail.com",
+      );
+    }
+  };
 
+  // Pick a photo from gallery
+  const pickPhotoFromLibrary = async (
+    documentType: keyof Documents,
+    label: string,
+  ) => {
+    try {
+      const result = await launchImageLibrary({
+        mediaType: "photo",
+        quality: 0.5, // Reduced quality for faster uploads
+        maxWidth: 1920,
+        maxHeight: 1920,
+        includeBase64: false,
+      });
+
+      if (result.didCancel) {
+        return;
+      }
+
+      if (result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        console.log("Photo picked:", {
+          uri: asset.uri,
+          fileName: asset.fileName,
+          type: asset.type,
+        });
+
+        setDocuments((prev) => ({
+          ...prev,
+          [documentType]: {
+            uri: asset.uri!,
+            name: asset.fileName || `${documentType}_${Date.now()}.jpg`,
+            type: asset.type || "image/jpeg",
+          },
+        }));
+      }
+    } catch (error) {
+      console.error("Error picking photo:", error);
+      Alert.alert("Error", `Failed to pick photo`);
+    }
+  };
+
+  // Pick a file (PDF or image file)
+  const pickFile = async (documentType: keyof Documents, label: string) => {
+    try {
+      const result = await DocumentPicker.pick({
+        type: [DocumentPicker.types.pdf, DocumentPicker.types.images],
+        copyTo: "documentDirectory",
+      });
+
+      if (result && result[0]) {
+        const doc = result[0];
+        // Use the copied file path if available (better for iOS)
+        const fileUri = doc.fileCopyUri || doc.uri;
+
+        console.log("File picked:", {
+          uri: fileUri,
+          name: doc.name,
+          type: doc.type,
+        });
+
+        setDocuments((prev) => ({
+          ...prev,
+          [documentType]: {
+            uri: fileUri,
+            name: doc.name || `${documentType}_${Date.now()}.pdf`,
+            type: doc.type || "application/pdf",
+          },
+        }));
+      }
+    } catch (error) {
+      if (!DocumentPicker.isCancel(error)) {
+        console.error("Error picking file:", error);
+        Alert.alert("Error", `Failed to pick ${label}`);
+      }
+    }
+  };
+
+  // Show choice dialog: Photo or File
+  const pickDocument = async (documentType: keyof Documents, label: string) => {
+    Alert.alert(
+      "Upload " + label,
+      "Choose an option:",
+      [
+        {
+          text: "Take/Select Photo",
+          onPress: () => pickPhotoFromLibrary(documentType, label),
+        },
+        {
+          text: "Select File (PDF/Image)",
+          onPress: () => pickFile(documentType, label),
+        },
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+      ],
+      { cancelable: true },
+    );
+  };
+
+  // Upload all documents and save profile
+  const handleSubmit = async () => {
+    if (!user) {
+      Alert.alert("Error", "You must be logged in to complete onboarding");
+      return;
+    }
+
+    if (!businessName.trim()) {
+      Alert.alert("Required", "Please enter your business name");
+      return;
+    }
+
+    if (!email.trim()) {
+      Alert.alert("Required", "Please enter your email address");
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert("Invalid Email", "Please enter a valid email address");
+      return;
+    }
+
+    if (!name.trim()) {
+      Alert.alert("Required", "Please enter your name");
+      return;
+    }
+
+    if (!insuranceExpiry) {
+      Alert.alert("Required", "Please enter insurance expiry date");
+      return;
+    }
+
+    const requiredDocs = [
+      { key: "insuranceCert", label: "Insurance Certificate" },
+      { key: "driversLicense", label: "Driver's License" },
+      { key: "w9", label: "W9 Form" },
+    ];
+
+    for (const doc of requiredDocs) {
+      if (!documents[doc.key as keyof Documents]) {
+        Alert.alert("Required", `Please upload ${doc.label}`);
+        return;
+      }
+    }
+
+    setIsUploading(true);
+    setUploadProgress("Uploading documents...");
+
+    try {
+      const uploadedPaths: any = {};
+
+      // Upload Insurance Certificate
+      if (documents.insuranceCert) {
+        setUploadProgress("Uploading insurance certificate...");
+        const path = await uploadMechanicDocument(
+          user.uid,
+          "insurance",
+          documents.insuranceCert.uri,
+          documents.insuranceCert.name,
+        );
+        uploadedPaths.insuranceCert = path;
+      }
+
+      // Upload Driver's License
+      if (documents.driversLicense) {
+        setUploadProgress("Uploading driver's license...");
+        const path = await uploadMechanicDocument(
+          user.uid,
+          "identity",
+          documents.driversLicense.uri,
+          documents.driversLicense.name,
+        );
+        uploadedPaths.driversLicense = path;
+      }
+
+      // Upload W9
+      if (documents.w9) {
+        setUploadProgress("Uploading W9 form...");
+        const path = await uploadMechanicDocument(
+          user.uid,
+          "tax",
+          documents.w9.uri,
+          documents.w9.name,
+        );
+        uploadedPaths.w9 = path;
+      }
+
+      // Upload Business Registration (optional)
+      if (documents.businessReg) {
+        setUploadProgress("Uploading business registration...");
+        const path = await uploadMechanicDocument(
+          user.uid,
+          "business",
+          documents.businessReg.uri,
+          documents.businessReg.name,
+        );
+        uploadedPaths.businessReg = path;
+      }
+
+      // Save mechanic profile
+      setUploadProgress("Saving profile...");
+      await saveMechanicProfile(user.uid, {
+        businessName,
+        insuranceExpiry,
+        email: email.trim(),
+        name: name.trim(),
+        phone: phone.trim(),
+        documents: uploadedPaths,
+      });
+
+      Alert.alert(
+        "Success",
+        "Your documents have been uploaded successfully. Your profile will be reviewed shortly.",
+        [
+          {
+            text: "OK",
+            onPress: () => navigation.replace("MechanicDashboard"),
+          },
+        ],
+      );
+    } catch (error) {
+      console.error("Error uploading documents:", error);
+      Alert.alert("Error", "Failed to upload documents. Please try again.");
+    } finally {
+      setIsUploading(false);
+      setUploadProgress("");
+    }
+  };
+
+  const DocumentUploadButton = ({
+    label,
+    documentKey,
+    uploaded,
+    onPress,
+  }: {
+    label: string;
+    documentKey: keyof Documents;
+    uploaded: boolean;
+    onPress: () => void;
+  }) => (
+    <View style={styles.documentButton}>
+      <TouchableOpacity
+        style={[styles.uploadButton, uploaded && styles.uploadButtonSuccess]}
+        onPress={onPress}
+        disabled={isUploading}
+      >
+        <Text style={styles.uploadButtonText}>
+          {uploaded ? "✓ " : "📄 "}
+          {label}
+        </Text>
+        <Text style={styles.uploadButtonSub}>
+          {uploaded ? documents[documentKey]?.name : "Tap to upload"}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  return (
+    <ScrollView style={styles.container}>
+      <View style={styles.content}>
+        <Text style={styles.title}>Mechanic Onboarding</Text>
+        <Text style={styles.subtitle}>
+          Complete your profile and upload required documents
+        </Text>
+
+        {/* Required Documents List */}
+        <View style={styles.requirementsBox}>
+          <Text style={styles.requirementsTitle}>📋 Required Documents</Text>
+          <Text style={styles.requirementText}>
+            1. Insurance Certificate (Photo or PDF)
+          </Text>
+          <Text style={styles.requirementText}>
+            2. Driver's License (Photo)
+          </Text>
+          <Text style={styles.requirementText}>
+            3. W9 Tax Form (Photo or PDF)
+          </Text>
+          <Text style={styles.requirementText}>
+            4. Business Registration (Photo or PDF - Optional)
+          </Text>
+        </View>
+
+        {/* Business Information */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Business Information</Text>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Business Name *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your business name"
+              value={businessName}
+              onChangeText={setBusinessName}
+              editable={!isUploading}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Insurance Expiry Date *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="YYYY-MM-DD"
+              value={insuranceExpiry}
+              onChangeText={setInsuranceExpiry}
+              editable={!isUploading}
+            />
+            <Text style={styles.helperText}>
+              Format: 2027-04-01 (YYYY-MM-DD)
+            </Text>
+          </View>
+        </View>
+
+        {/* Contact Information */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Contact Information</Text>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email Address *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="your.email@example.com"
+              value={email}
+              onChangeText={setEmail}
+              editable={!isUploading}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <Text style={styles.helperText}>
+              We'll send approval notifications to this address
+            </Text>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Full Name *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your full name"
+              value={name}
+              onChangeText={setName}
+              editable={!isUploading}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Phone Number (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your phone number"
+              value={phone}
+              onChangeText={setPhone}
+              editable={!isUploading}
+              keyboardType="phone-pad"
+            />
+          </View>
+        </View>
+
+        {/* Email Option */}
+        <TouchableOpacity
+          style={styles.emailButton}
+          onPress={handleEmailDocuments}
+        >
+          <Text style={styles.emailButtonText}>📧 Email Documents</Text>
+          <Text style={styles.emailButtonSubtext}>
+            Prefer to email? Send documents to getmychanic@gmail.com
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.dividerContainer}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>OR UPLOAD DIRECTLY</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        {/* Document Uploads */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Required Documents</Text>
+
+          <DocumentUploadButton
+            label="Insurance Certificate"
+            documentKey="insuranceCert"
+            uploaded={!!documents.insuranceCert}
+            onPress={() =>
+              pickDocument("insuranceCert", "Insurance Certificate")
+            }
+          />
+
+          <DocumentUploadButton
+            label="Driver's License"
+            documentKey="driversLicense"
+            uploaded={!!documents.driversLicense}
+            onPress={() => pickDocument("driversLicense", "Driver's License")}
+          />
+
+          <DocumentUploadButton
+            label="W9 Tax Form"
+            documentKey="w9"
+            uploaded={!!documents.w9}
+            onPress={() => pickDocument("w9", "W9 Form")}
+          />
+
+          <Text style={styles.sectionTitle}>Optional Documents</Text>
+
+          <DocumentUploadButton
+            label="Business Registration"
+            documentKey="businessReg"
+            uploaded={!!documents.businessReg}
+            onPress={() => pickDocument("businessReg", "Business Registration")}
+          />
+        </View>
+
+        {/* Upload Progress */}
+        {isUploading && (
+          <View style={styles.progressContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.progressText}>{uploadProgress}</Text>
+          </View>
+        )}
+
+        {/* Submit Button */}
+        <TouchableOpacity
+          style={[
+            styles.submitButton,
+            isUploading && styles.submitButtonDisabled,
+          ]}
+          onPress={handleSubmit}
+          disabled={isUploading}
+        >
+          <Text style={styles.submitButtonText}>
+            {isUploading ? "Uploading..." : "Submit for Review"}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.infoBox}>
+          <Text style={styles.infoText}>
+            All documents will be securely stored and reviewed by our team. You
+            will be notified once your profile is verified.
+          </Text>
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#f5f5f5",
+  },
+  content: {
+    padding: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "bold",
+    marginBottom: 8,
+    color: "#333",
+  },
+  subtitle: {
+    fontSize: 16,
+    color: "#666",
+    marginBottom: 24,
+  },
+  section: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 16,
+    color: "#333",
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 8,
+    color: "#333",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: "#fff",
+  },
+  helperText: {
+    fontSize: 12,
+    color: "#999",
+    marginTop: 4,
+  },
+  documentButton: {
+    marginBottom: 12,
+  },
+  uploadButton: {
+    backgroundColor: "#f0f0f0",
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: "#ddd",
+    borderStyle: "dashed",
+  },
+  uploadButtonSuccess: {
+    backgroundColor: "#e8f5e9",
+    borderColor: "#4caf50",
+    borderStyle: "solid",
+  },
+  uploadButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 4,
+  },
+  uploadButtonSub: {
+    fontSize: 12,
+    color: "#666",
+  },
+  progressContainer: {
+    alignItems: "center",
+    padding: 20,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  progressText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: "#666",
+  },
+  submitButton: {
+    backgroundColor: "#007AFF",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  submitButtonDisabled: {
+    backgroundColor: "#ccc",
+  },
+  submitButtonText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  infoBox: {
+    backgroundColor: "#e3f2fd",
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 32,
+  },
+  infoText: {
+    fontSize: 14,
+    color: "#1976d2",
+    lineHeight: 20,
+  },
+  requirementsBox: {
+    backgroundColor: "#fff3cd",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: "#ffc107",
+  },
+  requirementsTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#856404",
+    marginBottom: 12,
+  },
+  requirementText: {
+    fontSize: 14,
+    color: "#856404",
+    marginBottom: 6,
+    paddingLeft: 8,
+  },
+  dividerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#ddd",
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+    color: "#999",
+    fontWeight: "600",
+  },
+  emailButton: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: "#007AFF",
+  },
+  emailButtonText: {
+    color: "#007AFF",
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  emailButtonSubtext: {
+    color: "#666",
+    fontSize: 13,
+    textAlign: "center",
+  },
+});

@@ -139,7 +139,6 @@ export default function FindMechanicsScreen() {
         longitude: location.coords.longitude,
       };
 
-      console.log("Got user location:", coords);
       setUserLocation(coords);
 
       // Fetch nearby mechanics after getting location
@@ -239,17 +238,14 @@ export default function FindMechanicsScreen() {
 
       // Handle zip code/location search
       if (locationQuery.trim()) {
-        console.log("Attempting to geocode:", locationQuery.trim());
         try {
           const coordinates = await geocodeLocation(locationQuery.trim());
           if (coordinates) {
-            console.log("Geocoding successful, new coordinates:", coordinates);
             searchLatitude = coordinates.latitude;
             searchLongitude = coordinates.longitude;
             // Update user location state to the new search location
             setUserLocation(coordinates);
           } else {
-            console.log("Geocoding failed, using default location");
             Alert.alert(
               "Location Not Found",
               `Could not find "${locationQuery.trim()}". Using current location instead.`
@@ -309,7 +305,6 @@ export default function FindMechanicsScreen() {
   const geocodeLocation = async (
     location: string
   ): Promise<{ latitude: number; longitude: number } | null> => {
-    console.log("Geocoding location:", location);
 
     // Simple zip code fallback for common areas
     const zipCodeFallbacks: {

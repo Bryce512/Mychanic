@@ -53,7 +53,6 @@ export const DiagnosticsProvider = ({
         vehicles.map(async (v: any) => {
           try {
             const diagInfo = await firebaseService.getVehicleById(v.id);
-            console.log(diagInfo);
             diagMap[v.id] = {
               vehicleId: v.id,
               dtcCodes: diagInfo?.dtcCodes || [],

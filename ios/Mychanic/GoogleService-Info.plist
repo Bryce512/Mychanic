@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>578434461817-i6080geine5mmnkneeeolij2huq3lofp.apps.googleusercontent.com</string>
+	<string>578434461817-md1gkd20l3ue846hossn1v1g2ip189uk.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.578434461817-i6080geine5mmnkneeeolij2huq3lofp</string>
+	<string>com.googleusercontent.apps.578434461817-md1gkd20l3ue846hossn1v1g2ip189uk</string>
 	<key>API_KEY</key>
 	<string>AIzaSyAZ2Xk8Kkbc-0tdkJBqWhqNZie8Ls7cEnc</string>
 	<key>GCM_SENDER_ID</key>
@@ -13,7 +13,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>app.mychanic.device</string>
+	<string>com.bryce512.Mychanic</string>
 	<key>PROJECT_ID</key>
 	<string>fluid-tangent-405719</string>
 	<key>STORAGE_BUCKET</key>
@@ -29,7 +29,7 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:578434461817:ios:5509bcf8e73151e2c524a8</string>
+	<string>1:578434461817:ios:b4b201549690d55ec524a8</string>
 	<key>DATABASE_URL</key>
 	<string>https://fluid-tangent-405719-default-rtdb.firebaseio.com</string>
 </dict>

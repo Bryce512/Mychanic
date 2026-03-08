@@ -1,5 +1,3 @@
-// Debug: Log all vehicles and their ownerId fields
-import appleAuth from "@invertase/react-native-apple-authentication";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { initializeApp, getApp, getApps } from "@react-native-firebase/app";
 import {
@@ -34,7 +32,13 @@ import {
   deleteField,
 } from "@react-native-firebase/firestore";
 import type { FirebaseAuthTypes } from "@react-native-firebase/auth";
-import storage from "@react-native-firebase/storage";
+import {
+  getStorage,
+  ref,
+  putFile,
+  getDownloadURL,
+} from "@react-native-firebase/storage";
+import appleAuth from "@invertase/react-native-apple-authentication";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -79,16 +83,190 @@ export const uploadVehicleImage = async (
   userId: string,
   vehicleId: string,
   uri: string,
-  ext: string = "jpg"
+  ext: string = "jpg",
 ) => {
   try {
-    const path = `user_uploads/${userId}/${vehicleId}.${ext}`;
-    const ref = storage().ref(path);
-    await ref.putFile(uri);
-    const url = await ref.getDownloadURL();
+    const pathString = `user_uploads/${userId}/${vehicleId}.${ext}`;
+    const storage = getStorage();
+    const storageRef = ref(storage, pathString);
+    await putFile(storageRef, uri);
+    const url = await getDownloadURL(storageRef);
     return url;
   } catch (error) {
     console.error("Error uploading vehicle image:", error);
+    throw error;
+  }
+};
+
+// Upload mechanic document to Firebase Storage and return the storage path
+export const uploadMechanicDocument = async (
+  mechanicId: string,
+  documentType: "insurance" | "identity" | "tax" | "business",
+  uri: string,
+  fileName: string,
+) => {
+  try {
+    console.log("Uploading document:", {
+      mechanicId,
+      documentType,
+      fileName,
+      uri,
+    });
+
+    const pathString = `mechanic-documents/${mechanicId}/${documentType}/${fileName}`;
+    const storage = getStorage();
+    const storageRef = ref(storage, pathString);
+
+    // putFile expects a local file path (can have file:// prefix)
+    await putFile(storageRef, uri);
+
+    console.log("Document uploaded successfully to:", pathString);
+
+    // Return the gs:// URL format for Firestore storage
+    return `gs://${storage.app.options.storageBucket}/${pathString}`;
+  } catch (error) {
+    console.error("Error uploading mechanic document:", error);
+    throw error;
+  }
+};
+
+// Convert gs:// URL to download URL for viewing documents
+export const getDocumentDownloadURL = async (
+  gsUrl: string,
+): Promise<string> => {
+  try {
+    console.log("getDocumentDownloadURL - Input:", gsUrl);
+
+    if (!gsUrl.startsWith("gs://")) {
+      throw new Error("Invalid gs:// URL");
+    }
+
+    // Extract path from gs://bucket/path format
+    const path = gsUrl.replace("gs://", "");
+    console.log("Path after removing gs://:", path);
+
+    const [bucket, ...pathParts] = path.split("/");
+    const filePath = pathParts.join("/");
+
+    console.log("Bucket:", bucket);
+    console.log("File path:", filePath);
+
+    const storage = getStorage();
+    const storageRef = ref(storage, filePath);
+    console.log("Storage ref created for:", filePath);
+
+    const downloadURL = await getDownloadURL(storageRef);
+    console.log("Download URL obtained:", downloadURL);
+
+    return downloadURL;
+  } catch (error) {
+    console.error("Error getting download URL:", error);
+    if (error instanceof Error) {
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+    }
+    throw error;
+  }
+};
+
+// Save mechanic profile with documents to Firestore
+export const saveMechanicProfile = async (
+  mechanicId: string,
+  profileData: {
+    businessName: string;
+    insuranceExpiry: string;
+    email: string;
+    name?: string;
+    phone?: string;
+    documents: {
+      insuranceCert?: string;
+      driversLicense?: string;
+      w9?: string;
+      businessReg?: string;
+    };
+  },
+) => {
+  try {
+    const db = getFirestore();
+    const mechanicRef = doc(db, "mechanics", mechanicId);
+
+    const mechanicData = {
+      businessName: profileData.businessName,
+      email: profileData.email,
+      name: profileData.name || "",
+      phone: profileData.phone || "",
+      insuranceStatus: "pending",
+      insuranceExpiry: profileData.insuranceExpiry,
+      documents: profileData.documents,
+      onboardingStatus: "pending",
+      verified: false,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    await setDoc(mechanicRef, mechanicData, { merge: true });
+
+    // Also update user profile with onboarding status
+    const userRef = doc(db, "users", mechanicId);
+    await updateDoc(userRef, {
+      "profile.onboardingStatus": "pending",
+      "profile.onboardingSubmittedAt": serverTimestamp(),
+    });
+
+    console.log("Mechanic profile saved successfully");
+    return true;
+  } catch (error) {
+    console.error("Error saving mechanic profile:", error);
+    throw error;
+  }
+};
+
+// Get mechanic profile from Firestore
+export const getMechanicProfile = async (mechanicId: string) => {
+  try {
+    const db = getFirestore();
+    const mechanicRef = doc(db, "mechanics", mechanicId);
+    const mechanicSnap = await getDoc(mechanicRef);
+
+    if (mechanicSnap.exists()) {
+      return mechanicSnap.data();
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching mechanic profile:", error);
+    throw error;
+  }
+};
+
+// Update mechanic onboarding status (admin only)
+export const updateMechanicOnboardingStatus = async (
+  mechanicId: string,
+  status: "incomplete" | "pending" | "approved" | "rejected",
+  adminNote?: string,
+) => {
+  try {
+    const db = getFirestore();
+
+    // Update mechanics collection
+    const mechanicRef = doc(db, "mechanics", mechanicId);
+    await updateDoc(mechanicRef, {
+      onboardingStatus: status,
+      verified: status === "approved",
+      statusUpdatedAt: serverTimestamp(),
+      adminNote: adminNote || "",
+    });
+
+    // Update user profile
+    const userRef = doc(db, "users", mechanicId);
+    await updateDoc(userRef, {
+      "profile.onboardingStatus": status,
+      "profile.statusUpdatedAt": serverTimestamp(),
+    });
+
+    console.log("Onboarding status updated to:", status);
+    return true;
+  } catch (error) {
+    console.error("Error updating onboarding status:", error);
     throw error;
   }
 };
@@ -106,7 +284,7 @@ export const getJob = async (jobId: string) => {
 // Update diagInfo for a specific vehicle
 export const updateVehicleDiagInfo = async (
   vehicleId: string,
-  diagData: any
+  diagData: any,
 ) => {
   const db = getFirestore();
   let dataToSet = { ...diagData };
@@ -134,7 +312,7 @@ export const getVehicleById = async (vehicleId: string) => {
 export const writeData = async (
   userId: string,
   name: string,
-  email: string
+  email: string,
 ) => {
   const db = getFirestore();
   const userData = {
@@ -170,7 +348,7 @@ export const readData = async (userId: string) => {
 // Creates a user profile in the database if it doesn't already exist
 export const ensureUserProfile = async (
   user: FirebaseAuthTypes.User,
-  role: "user" | "mechanic" = "user"
+  role: "user" | "mechanic" = "user",
 ) => {
   if (!user) return null;
 
@@ -243,7 +421,7 @@ export const signIn = async (email: string, password: string) => {
     const userCredential = await signInWithEmailAndPassword(
       auth,
       email,
-      password
+      password,
     );
 
     // Return successful login immediately - don't wait for Firestore operations
@@ -286,14 +464,14 @@ export const signIn = async (email: string, password: string) => {
 export const signUp = async (
   email: string,
   password: string,
-  role: "user" | "mechanic" = "user"
+  role: "user" | "mechanic" = "user",
 ) => {
   try {
     const auth = getAuth();
     const userCredential = await createUserWithEmailAndPassword(
       auth,
       email,
-      password
+      password,
     );
 
     console.log("Signup successful, user ID:", userCredential.user.uid);
@@ -307,7 +485,7 @@ export const signUp = async (
       } catch (firestoreError: any) {
         console.warn(
           "Background: Could not create user profile:",
-          firestoreError.code
+          firestoreError.code,
         );
         // This will be retried later when user accesses profile-related features
       }
@@ -323,7 +501,7 @@ export const signUp = async (
 // Phone Authentication
 export const signInWithPhone = async (
   phoneNumber: string,
-  role?: "user" | "mechanic"
+  role?: "user" | "mechanic",
 ) => {
   try {
     const auth = getAuth();
@@ -338,7 +516,7 @@ export const signInWithPhone = async (
 export const confirmPhoneCode = async (
   confirmation: any,
   verificationCode: string,
-  role: "user" | "mechanic" = "user"
+  role: "user" | "mechanic" = "user",
 ) => {
   try {
     const userCredential = await confirmation.confirm(verificationCode);
@@ -349,12 +527,12 @@ export const confirmPhoneCode = async (
         console.log("Background: Creating user profile for phone auth...");
         await ensureUserProfile(userCredential.user, role);
         console.log(
-          "Background: User profile created successfully for phone auth"
+          "Background: User profile created successfully for phone auth",
         );
       } catch (firestoreError: any) {
         console.warn(
           "Background: Could not create user profile for phone auth:",
-          firestoreError.code
+          firestoreError.code,
         );
       }
     }, 100);
@@ -383,7 +561,7 @@ export const signInWithGoogle = async (role?: "user" | "mechanic") => {
 
     // Create a Google credential with the token
     const googleCredential = GoogleAuthProvider.credential(
-      userInfo.data?.idToken
+      userInfo.data?.idToken,
     );
 
     // Sign in with Firebase
@@ -396,12 +574,12 @@ export const signInWithGoogle = async (role?: "user" | "mechanic") => {
         console.log("Background: Creating user profile for Google auth...");
         await ensureUserProfile(userCredential.user, role);
         console.log(
-          "Background: User profile created successfully for Google auth"
+          "Background: User profile created successfully for Google auth",
         );
       } catch (firestoreError: any) {
         console.warn(
           "Background: Could not create user profile for Google auth:",
-          firestoreError.code
+          firestoreError.code,
         );
       }
     }, 100);
@@ -460,7 +638,7 @@ export const signInWithApple = async (role?: "user" | "mechanic") => {
       } catch (firestoreError: any) {
         console.warn(
           "Background: Could not create user profile for Apple auth:",
-          firestoreError.code
+          firestoreError.code,
         );
       }
     }, 100);
@@ -539,7 +717,7 @@ export const getCurrentUser = () => {
 };
 
 export const onAuthChange = (
-  callback: (user: FirebaseAuthTypes.User | null) => void
+  callback: (user: FirebaseAuthTypes.User | null) => void,
 ) => {
   const auth = getAuth();
   return onAuthStateChanged(auth, callback);
@@ -627,7 +805,7 @@ export const debugFirestoreData = async (userId: string) => {
     } catch (connectivityError: any) {
       console.error(
         "🔍 Firestore connectivity test failed:",
-        connectivityError
+        connectivityError,
       );
       console.error("🔍 Error code:", connectivityError.code);
       console.error("🔍 Error message:", connectivityError.message);
@@ -649,7 +827,7 @@ export const debugFirestoreData = async (userId: string) => {
     try {
       const vehiclesQuery = query(
         collection(db, "vehicles"),
-        where("ownerId", "array-contains", userId)
+        where("ownerId", "array-contains", userId),
       );
       const defaultVehiclesSnap = await getDocs(vehiclesQuery);
       console.log("🔍 Default DB vehicles count:", defaultVehiclesSnap.size);
@@ -670,8 +848,6 @@ export const getVehicles = async (userId: string) => {
   const vehicles: any[] = [];
   const seenIds = new Set<string>();
 
-  console.log(`[getVehicles] querying for userId: "${userId}"`);
-
   const add = (d: any) => {
     if (!seenIds.has(d.id)) {
       seenIds.add(d.id);
@@ -683,32 +859,43 @@ export const getVehicles = async (userId: string) => {
   try {
     const userSnap = await getDoc(doc(db, "users", userId));
     const vehicleIds: string[] = userSnap.data()?.vehicleIds ?? [];
-    console.log(`[getVehicles] vehicleIds on user doc: ${vehicleIds.length}`);
     await Promise.all(
       vehicleIds.map(async (vid) => {
         try {
           const vSnap = await getDoc(doc(db, "vehicles", vid));
           if (vSnap.exists()) add(vSnap);
-        } catch (e) { console.warn(`[getVehicles] failed to fetch vehicle ${vid}:`, e); }
-      })
+        } catch (e) {
+          console.warn(`[getVehicles] failed to fetch vehicle ${vid}:`, e);
+        }
+      }),
     );
-  } catch (e) { console.warn("[getVehicles] user doc fetch failed:", e); }
+  } catch (e) {
+    console.warn("[getVehicles] user doc fetch failed:", e);
+  }
 
   // Shared: drivers array-contains
   try {
-    const driversSnap = await getDocs(query(collection(db, "vehicles"), where("drivers", "array-contains", userId)));
-    console.log(`[getVehicles] drivers array-contains: ${driversSnap.size} docs`);
+    const driversSnap = await getDocs(
+      query(
+        collection(db, "vehicles"),
+        where("drivers", "array-contains", userId),
+      ),
+    );
     driversSnap.forEach(add);
-  } catch (e) { console.warn("[getVehicles] drivers array-contains query failed:", e); }
+  } catch (e) {
+    console.warn("[getVehicles] drivers array-contains query failed:", e);
+  }
 
   // Legacy: owner string field
   try {
-    const legacyOwnerSnap = await getDocs(query(collection(db, "vehicles"), where("owner", "==", userId)));
-    console.log(`[getVehicles] owner == userId (legacy): ${legacyOwnerSnap.size} docs`);
+    const legacyOwnerSnap = await getDocs(
+      query(collection(db, "vehicles"), where("owner", "==", userId)),
+    );
     legacyOwnerSnap.forEach(add);
-  } catch (e) { console.warn("[getVehicles] owner == query failed:", e); }
+  } catch (e) {
+    console.warn("[getVehicles] owner == query failed:", e);
+  }
 
-  console.log(`[getVehicles] total unique vehicles found: ${vehicles.length}`);
   return vehicles;
 };
 
@@ -747,7 +934,7 @@ export const deleteVehicle = async (userId: string, vehicleId: string) => {
 export const addVehicleOwner = async (
   vehicleId: string,
   newOwnerId: string,
-  driverInfo: { name: string; maskedEmail: string }
+  driverInfo: { name: string; maskedEmail: string },
 ) => {
   const db = getFirestore();
   const vehicleRef = doc(db, "vehicles", vehicleId);
@@ -761,7 +948,7 @@ export const addVehicleOwner = async (
 // Remove a driver from a vehicle and delete their stored display info.
 export const removeVehicleOwner = async (
   vehicleId: string,
-  driverUid: string
+  driverUid: string,
 ) => {
   const db = getFirestore();
   const vehicleRef = doc(db, "vehicles", vehicleId);
@@ -790,7 +977,7 @@ export const getDiagnosticLogs = async (userId: string, vehicleId: string) => {
   const logsQuery = query(
     logsCol,
     where("vehicleId", "==", vehicleId),
-    where("userId", "==", userId)
+    where("userId", "==", userId),
   );
   const logsSnapshot = await getDocs(logsQuery);
   const logs = logsSnapshot.docs.map((doc: any) => ({
@@ -803,7 +990,7 @@ export const getDiagnosticLogs = async (userId: string, vehicleId: string) => {
 export const updateUserAddress = async (
   userId: string,
   addressType: "homeAddress" | "workAddress",
-  address: string
+  address: string,
 ) => {
   const db = getFirestore();
   const userRef = doc(db, "users", userId);
@@ -829,7 +1016,7 @@ export const getJobsList = async () => {
 
 export const claimJob = async (
   jobId: string,
-  mechanicId: string | undefined
+  mechanicId: string | undefined,
 ) => {
   if (!mechanicId) {
     throw new Error("Mechanic ID is required to claim a job");
@@ -854,7 +1041,6 @@ export const getMyJobs = async (mechanicId: string) => {
     id: doc.id,
     ...doc.data(),
   }));
-  console.log(`Fetched ${jobs.length} jobs for mechanic ${mechanicId}`);
   return jobs;
 };
 
@@ -883,7 +1069,7 @@ export const createJob = async (jobData: any) => {
 
 export const updateJobStatus = async (
   jobId: string,
-  newStatus: "available" | "claimed" | "in_progress" | "completed"
+  newStatus: "available" | "claimed" | "in_progress" | "completed",
 ) => {
   const db = getFirestore();
   const jobRef = doc(db, "jobs", jobId);
@@ -904,7 +1090,7 @@ export const updateJobStatus = async (
   return true;
 };
 
-export const addCarOwner = async  (email: String) => {
+export const addCarOwner = async (email: String) => {
   // TODO
 };
 
@@ -944,5 +1130,9 @@ export default {
   createJob,
   updateJobStatus,
   updateUserProfile,
-  addCarOwner
+  addCarOwner,
+  uploadMechanicDocument,
+  saveMechanicProfile,
+  getMechanicProfile,
+  updateMechanicOnboardingStatus,
 };

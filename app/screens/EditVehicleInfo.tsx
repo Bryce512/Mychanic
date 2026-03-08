@@ -4,6 +4,10 @@ import { RootStackParamList } from "../navigation/AppNavigator";
 import firebaseService from "../services/firebaseService";
 import VehicleForm from "../components/VehicleForm";
 import { useDiagnostics } from "../contexts/VehicleDiagnosticsContext";
+import {
+  scheduleMileageReminder,
+  cancelMileageReminder,
+} from "../services/notificationService";
 
 export default function EditVehicleInfoScreen() {
   const navigation = useNavigation();
@@ -15,7 +19,7 @@ export default function EditVehicleInfoScreen() {
   const handleSave = async (
     vehicleData: any,
     maintConfig: any,
-    imageUri?: string | null
+    imageUri?: string | null,
   ) => {
     setLoading(true);
     try {
@@ -37,23 +41,44 @@ export default function EditVehicleInfoScreen() {
           currentUser.uid,
           vehicle.id,
           imageUri,
-          ext
+          ext,
         );
       } else if (imageUri && imageUri.startsWith("http")) {
         imageUrl = imageUri;
       }
 
       // Prepare vehicle data for update
+      const mileageChanged =
+        vehicleData.mileage !== undefined &&
+        Number(vehicleData.mileage) !== Number(vehicle.mileage);
+
+      console.log(
+        "[EditVehicleInfo] mileageChanged:", mileageChanged,
+        "| new:", vehicleData.mileage,
+        "| old:", vehicle.mileage,
+      );
+
       const updatedVehicleData = {
         ...vehicleData,
         image: imageUrl,
+        // Keep lastMileageUpdate in sync so the Cloud Function can query it
+        ...(mileageChanged ? { lastMileageUpdate: Date.now() } : {}),
       };
 
       // Update the vehicle
       const result = await firebaseService.updateVehicle(
         vehicle.id,
-        updatedVehicleData
+        updatedVehicleData,
       );
+
+      // If mileage was updated, reset the 2-week local reminder
+      if (mileageChanged) {
+        const nickname =
+          vehicleData.nickname || vehicle.nickname || "Your vehicle";
+        await scheduleMileageReminder(vehicle.id, nickname).catch(
+          console.error,
+        );
+      }
 
       // Save maintenance config
       const maintConfigData = {
@@ -70,7 +95,7 @@ export default function EditVehicleInfoScreen() {
       const db = await import("@react-native-firebase/database");
       const ref = db.ref(
         db.getDatabase(),
-        `users/${currentUser.uid}/vehicles/${vehicle.id}/maintConfigs`
+        `users/${currentUser.uid}/vehicles/${vehicle.id}/maintConfigs`,
       );
       await db.set(ref, maintConfigData);
 
