@@ -28,7 +28,7 @@ interface VehicleFormProps {
   onSave: (
     vehicleData: any,
     maintConfig?: any,
-    imageUri?: string | null
+    imageUri?: string | null,
   ) => Promise<{ id: string | null } | undefined>;
   onDelete?: () => Promise<void>;
   isEdit?: boolean;
@@ -38,7 +38,13 @@ interface VehicleFormProps {
 const TEXT_FIELDS = [
   { key: "mileage", label: "Mileage", required: true, numeric: true },
   { key: "nickname", label: "Nickname", required: false },
-  { key: "vin", label: "VIN", required: false, caps: "characters" as const, maxLength: 17 },
+  {
+    key: "vin",
+    label: "VIN",
+    required: false,
+    caps: "characters" as const,
+    maxLength: 17,
+  },
   { key: "engine", label: "Engine", required: false },
 ];
 
@@ -83,14 +89,14 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
 
       if (isEdit && initialData.year) {
         const makes = await vehicleDataService.getVehicleMakes(
-          parseInt(initialData.year)
+          parseInt(initialData.year),
         );
         setVehicleMakes(makes);
 
         if (initialData.make) {
           const models = await vehicleDataService.getVehicleModels(
             initialData.make,
-            parseInt(initialData.year)
+            parseInt(initialData.year),
           );
           setVehicleModels(models);
         }
@@ -105,7 +111,12 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
 
   // NHTSA handlers
   const handleYearSelect = async (year: number) => {
-    setForm((prev: any) => ({ ...prev, year: year.toString(), make: "", model: "" }));
+    setForm((prev: any) => ({
+      ...prev,
+      year: year.toString(),
+      make: "",
+      model: "",
+    }));
     setVehicleMakes([]);
     setVehicleModels([]);
     setShowYearDropdown(false);
@@ -129,7 +140,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
     try {
       const models = await vehicleDataService.getVehicleModels(
         makeName,
-        parseInt(form.year)
+        parseInt(form.year),
       );
       setVehicleModels(models);
     } catch {
@@ -140,7 +151,10 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
   };
 
   const handleModelSelect = (model: VehicleModel) => {
-    setForm((prev: any) => ({ ...prev, model: model.Model_Name || model.ModelName || "" }));
+    setForm((prev: any) => ({
+      ...prev,
+      model: model.Model_Name || model.ModelName || "",
+    }));
     setShowModelDropdown(false);
   };
 
@@ -149,7 +163,9 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
     if (vehicleMakes.length === 0 && form.year) {
       setIsLoadingVehicleData(true);
       try {
-        const makes = await vehicleDataService.getVehicleMakes(parseInt(form.year));
+        const makes = await vehicleDataService.getVehicleMakes(
+          parseInt(form.year),
+        );
         setVehicleMakes(makes);
       } catch {
         Alert.alert("Error", "Failed to load vehicle makes");
@@ -169,7 +185,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
       try {
         const models = await vehicleDataService.getVehicleModels(
           form.make,
-          parseInt(form.year)
+          parseInt(form.year),
         );
         setVehicleModels(models);
       } catch {
@@ -195,7 +211,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
     setLookupLoading(true);
     try {
       const response = await fetch(
-        `https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${vin}?format=json`
+        `https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${vin}?format=json`,
       );
       const data = await response.json();
       if (data.Results && data.Results.length > 0) {
@@ -224,13 +240,13 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
         // Pre-load makes/models for the VIN-decoded year/make so dropdowns work
         if (vehicleData.year) {
           const makes = await vehicleDataService.getVehicleMakes(
-            parseInt(vehicleData.year)
+            parseInt(vehicleData.year),
           );
           setVehicleMakes(makes);
           if (vehicleData.make) {
             const models = await vehicleDataService.getVehicleModels(
               vehicleData.make,
-              parseInt(vehicleData.year)
+              parseInt(vehicleData.year),
             );
             setVehicleModels(models);
           }
@@ -239,12 +255,15 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
       } else {
         Alert.alert(
           "Error",
-          "Could not retrieve vehicle information. Please check the VIN and try again."
+          "Could not retrieve vehicle information. Please check the VIN and try again.",
         );
       }
     } catch (error) {
       console.error("VIN lookup error:", error);
-      Alert.alert("Error", "Failed to lookup vehicle information. Please try again.");
+      Alert.alert(
+        "Error",
+        "Failed to lookup vehicle information. Please try again.",
+      );
     } finally {
       setLookupLoading(false);
     }
@@ -256,13 +275,16 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
       (response) => {
         if (response.didCancel) return;
         if (response.errorCode) {
-          Alert.alert("Image Picker Error", response.errorMessage || "Unknown error");
+          Alert.alert(
+            "Image Picker Error",
+            response.errorMessage || "Unknown error",
+          );
           return;
         }
         if (response.assets && response.assets.length > 0) {
           setImage(response.assets[0].uri || null);
         }
-      }
+      },
     );
   };
 
@@ -325,7 +347,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -335,7 +357,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
     value: string,
     onPress: () => void,
     isDisabled = false,
-    containerStyle?: object
+    containerStyle?: object,
   ) => (
     <View style={[vehicleFormStyles.inputGroup, containerStyle]}>
       <Text style={vehicleFormStyles.label}>
@@ -376,108 +398,109 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
     <>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[vehicleFormStyles.container, { paddingBottom: 40 }]}
+        contentContainerStyle={[
+          vehicleFormStyles.container,
+          { paddingBottom: 40 },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         automaticallyAdjustKeyboardInsets={true}
       >
-          {/* Image Picker */}
-          <View style={vehicleFormStyles.imageSection}>
-            <TouchableOpacity
-              onPress={pickImage}
-              disabled={uploading || saving || loading}
-            >
-              <Image
-                source={{ uri: image || DEFAULT_IMAGE }}
-                style={vehicleFormStyles.image}
-                resizeMode="cover"
-              />
-              <Text style={vehicleFormStyles.imageLabel}>
-                {uploading ? "Uploading..." : "Tap to change image"}
-              </Text>
-            </TouchableOpacity>
-            {uploading && <ActivityIndicator style={{ marginTop: 8 }} />}
-          </View>
+        {/* Image Picker */}
+        <View style={vehicleFormStyles.imageSection}>
+          <TouchableOpacity
+            onPress={pickImage}
+            disabled={uploading || saving || loading}
+          >
+            <Image
+              source={{ uri: image || DEFAULT_IMAGE }}
+              style={vehicleFormStyles.image}
+              resizeMode="cover"
+            />
+            <Text style={vehicleFormStyles.imageLabel}>
+              {uploading ? "Uploading..." : "Tap to change image"}
+            </Text>
+          </TouchableOpacity>
+          {uploading && <ActivityIndicator style={{ marginTop: 8 }} />}
+        </View>
 
-          {/* VIN Quick Lookup */}
-          {!isEdit && (
-            <View style={vehicleFormStyles.lookupSection}>
-              <Text style={vehicleFormStyles.sectionTitle}>
-                Quick Vehicle Lookup
+        {/* VIN Quick Lookup */}
+        {!isEdit && (
+          <View style={vehicleFormStyles.lookupSection}>
+            <Text style={vehicleFormStyles.sectionTitle}>
+              Quick Vehicle Lookup
+            </Text>
+            <Text style={vehicleFormStyles.sectionSubtitle}>
+              Enter VIN to auto-fill vehicle details from NHTSA database
+            </Text>
+            <View style={vehicleFormStyles.lookupGroup}>
+              <Text style={vehicleFormStyles.lookupLabel}>
+                VIN (17 characters)
               </Text>
-              <Text style={vehicleFormStyles.sectionSubtitle}>
-                Enter VIN to auto-fill vehicle details from NHTSA database
-              </Text>
-              <View style={vehicleFormStyles.lookupGroup}>
-                <Text style={vehicleFormStyles.lookupLabel}>
-                  VIN (17 characters)
-                </Text>
-                <View style={vehicleFormStyles.lookupInputRow}>
-                  <TextInput
-                    style={[
-                      vehicleFormStyles.input,
-                      { flex: 1, marginRight: 8 },
-                    ]}
-                    value={vin}
-                    onChangeText={setVin}
-                    placeholder="Enter VIN"
-                    maxLength={17}
-                    autoCapitalize="characters"
-                  />
-                  <TouchableOpacity
-                    style={vehicleFormStyles.lookupButton}
-                    onPress={lookupVehicleByVin}
-                    disabled={lookupLoading}
-                  >
-                    {lookupLoading ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Text style={vehicleFormStyles.lookupButtonText}>
-                        Lookup
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
+              <View style={vehicleFormStyles.lookupInputRow}>
+                <TextInput
+                  style={[vehicleFormStyles.input, { flex: 1, marginRight: 8 }]}
+                  value={vin}
+                  onChangeText={setVin}
+                  placeholder="Enter VIN"
+                  maxLength={17}
+                  autoCapitalize="characters"
+                />
+                <TouchableOpacity
+                  style={vehicleFormStyles.lookupButton}
+                  onPress={lookupVehicleByVin}
+                  disabled={lookupLoading}
+                >
+                  {lookupLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={vehicleFormStyles.lookupButtonText}>
+                      Lookup
+                    </Text>
+                  )}
+                </TouchableOpacity>
               </View>
             </View>
-          )}
-
-          {/* Year / Make / Model dropdowns */}
-          <View style={vehicleFormStyles.dropdownRow}>
-            {renderDropdown(
-              "Year",
-              "Year",
-              form.year?.toString() || "",
-              () => setShowYearDropdown(true),
-              false,
-              { width: 96 }
-            )}
-            {renderDropdown(
-              "Make",
-              "Make",
-              form.make || "",
-              openMakeDropdown,
-              !form.year,
-              { flex: 1 }
-            )}
           </View>
+        )}
 
+        {/* Year / Make / Model dropdowns */}
+        <View style={vehicleFormStyles.dropdownRow}>
           {renderDropdown(
-            "Model",
-            "Select Model",
-            form.model || "",
-            openModelDropdown,
-            !form.make
+            "Year",
+            "Year",
+            form.year?.toString() || "",
+            () => setShowYearDropdown(true),
+            false,
+            { width: 96 },
           )}
-
-          {isLoadingVehicleData && (
-            <Text style={vehicleFormStyles.loadingText}>
-              Loading vehicle data...
-            </Text>
+          {renderDropdown(
+            "Make",
+            "Make",
+            form.make || "",
+            openMakeDropdown,
+            !form.year,
+            { flex: 1 },
           )}
+        </View>
 
-          {/* Remaining free-text fields */}
-          {TEXT_FIELDS.map(({ key, label, required, numeric, caps, maxLength }) => (
+        {renderDropdown(
+          "Model",
+          "Select Model",
+          form.model || "",
+          openModelDropdown,
+          !form.make,
+        )}
+
+        {isLoadingVehicleData && (
+          <Text style={vehicleFormStyles.loadingText}>
+            Loading vehicle data...
+          </Text>
+        )}
+
+        {/* Remaining free-text fields */}
+        {TEXT_FIELDS.map(
+          ({ key, label, required, numeric, caps, maxLength }) => (
             <View key={key} style={vehicleFormStyles.inputGroup}>
               <Text style={vehicleFormStyles.label}>
                 {label}
@@ -497,24 +520,25 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
                 </Text>
               )}
             </View>
-          ))}
+          ),
+        )}
 
-          <Button
-            title={saving || loading ? "Saving..." : "Save"}
-            onPress={handleSave}
-            disabled={saving || loading || uploading}
-          />
-          {isEdit && onDelete && (
-            <View style={{ marginTop: 24 }}>
-              <Button
-                title={saving || loading ? "Deleting..." : "Delete Vehicle"}
-                color="#d32f2f"
-                onPress={handleDelete}
-                disabled={saving || loading}
-              />
-            </View>
-          )}
-        </ScrollView>
+        <Button
+          title={saving || loading ? "Saving..." : "Save"}
+          onPress={handleSave}
+          disabled={saving || loading || uploading}
+        />
+        {isEdit && onDelete && (
+          <View style={{ marginTop: 24 }}>
+            <Button
+              title={saving || loading ? "Deleting..." : "Delete Vehicle"}
+              color="#d32f2f"
+              onPress={handleDelete}
+              disabled={saving || loading}
+            />
+          </View>
+        )}
+      </ScrollView>
 
       {/* Year Modal */}
       <Modal visible={showYearDropdown} transparent animationType="slide">
