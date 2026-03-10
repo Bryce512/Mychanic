@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { useBluetooth } from "../contexts/BluetoothContext";
-import { obdDataFunctions } from "../services/obdService";
+import { obdDataFunctions, createOBDService } from "../services/obdService";
 import { obdDataFunctions as obdFunctions } from "../services/obdService";
 import Card, { CardContent, CardHeader } from "../components/Card";
 import LiveDataParameter from "../components/LiveDataParameter";
@@ -121,13 +121,13 @@ export default function LiveDataScreen() {
   const bluetoothContext = useBluetooth();
   const [refreshing, setRefreshing] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
-  const [pollInterval, setPollInterval] = useState<NodeJS.Timeout | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // const pidService = pidCommands();
 
   // Initialize live data structure with all parameters shown
   const [liveData, setLiveData] = useState<LiveDataItem[]>(() =>
-    initializeLiveData()
+    initializeLiveData(),
   );
 
   // Fetch all live data
@@ -140,13 +140,16 @@ export default function LiveDataScreen() {
     }
 
     try {
+      // Small delay between commands to allow device to process
+      const COMMAND_SPACING_MS = 200;
+
       // Fetch voltage with enhanced error handling
       try {
         console.log("Sending voltage command...");
         const voltage = await obdDataFunctions.fetchVoltage(
           plxDevice,
           bluetoothContext.sendCommand,
-          (message) => console.log(`[VOLTAGE] ${message}`)
+          (message) => console.log(`[VOLTAGE] ${message}`),
         );
         console.log("Voltage raw response:", voltage);
         if (voltage) {
@@ -156,8 +159,8 @@ export default function LiveDataScreen() {
             prevData.map((item) =>
               item.id === "voltage"
                 ? { ...item, value: voltageValue.toFixed(1) }
-                : item
-            )
+                : item,
+            ),
           );
         } else {
           console.log("Voltage returned null or invalid");
@@ -165,62 +168,56 @@ export default function LiveDataScreen() {
       } catch (e) {
         console.log("Failed to fetch voltage:", e);
       }
-
-      // Wait longer before next command (voltage needs more time to stabilize)
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
 
       // Fetch RPM
       try {
         console.log("Sending RPM command...");
         const rpm = await obdDataFunctions.getEngineRPM(
           plxDevice,
-          bluetoothContext.sendCommand
+          bluetoothContext.sendCommand,
         );
         console.log("RPM raw response:", rpm);
         if (rpm && typeof rpm === "number") {
           console.log("Parsed RPM value:", rpm);
           setLiveData((prevData) =>
             prevData.map((item) =>
-              item.id === "rpm" ? { ...item, value: Math.round(rpm) } : item
-            )
+              item.id === "rpm" ? { ...item, value: Math.round(rpm) } : item,
+            ),
           );
         }
       } catch (e) {
         console.log("Failed to fetch RPM:", e);
       }
-
-      // Wait before next command
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
 
       // Fetch vehicle speed
       try {
         console.log("Sending speed command...");
         const speed = await obdDataFunctions.getVehicleSpeed(
           plxDevice,
-          bluetoothContext.sendCommand
+          bluetoothContext.sendCommand,
         );
         console.log("Speed raw response:", speed);
         if (speed !== null) {
           console.log("Parsed speed value:", speed);
           setLiveData((prevData) =>
             prevData.map((item) =>
-              item.id === "speed" ? { ...item, value: speed } : item
-            )
+              item.id === "speed" ? { ...item, value: speed } : item,
+            ),
           );
         }
       } catch (e) {
         console.log("Failed to fetch speed:", e);
       }
-
-      // Wait before next command
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
 
       // Fetch coolant temperature
       try {
         console.log("Sending coolant temperature command...");
         const coolantTemp = await obdDataFunctions.getCoolantTemperature(
           plxDevice,
-          bluetoothContext.sendCommand
+          bluetoothContext.sendCommand,
         );
         console.log("Coolant temp raw response:", coolantTemp);
         if (coolantTemp) {
@@ -229,46 +226,42 @@ export default function LiveDataScreen() {
             prevData.map((item) =>
               item.id === "coolantTemp"
                 ? { ...item, value: coolantTemp.celsius }
-                : item
-            )
+                : item,
+            ),
           );
         }
       } catch (e) {
         console.log("Failed to fetch coolant temperature:", e);
       }
-
-      // Wait before next command
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
 
       // Fetch engine load
       try {
         console.log("Sending engine load command...");
         const engineLoad = await obdDataFunctions.getEngineLoad(
           plxDevice,
-          bluetoothContext.sendCommand
+          bluetoothContext.sendCommand,
         );
         console.log("Engine load raw response:", engineLoad);
         if (engineLoad !== null) {
           console.log("Parsed engine load value:", engineLoad);
           setLiveData((prevData) =>
             prevData.map((item) =>
-              item.id === "engineLoad" ? { ...item, value: engineLoad } : item
-            )
+              item.id === "engineLoad" ? { ...item, value: engineLoad } : item,
+            ),
           );
         }
       } catch (e) {
         console.log("Failed to fetch engine load:", e);
       }
-
-      // Wait before next command
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
 
       // Fetch throttle position
       try {
         console.log("Sending throttle position command...");
         const throttlePos = await obdDataFunctions.getThrottlePosition(
           plxDevice,
-          bluetoothContext.sendCommand
+          bluetoothContext.sendCommand,
         );
         console.log("Throttle position raw response:", throttlePos);
         if (throttlePos !== null) {
@@ -277,46 +270,42 @@ export default function LiveDataScreen() {
             prevData.map((item) =>
               item.id === "throttlePosition"
                 ? { ...item, value: throttlePos }
-                : item
-            )
+                : item,
+            ),
           );
         }
       } catch (e) {
         console.log("Failed to fetch throttle position:", e);
       }
-
-      // Wait before next command
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
 
       // Fetch fuel level
       try {
         console.log("Sending fuel level command...");
         const fuelLevel = await obdDataFunctions.getFuelLevel(
           plxDevice,
-          bluetoothContext.sendCommand
+          bluetoothContext.sendCommand,
         );
         console.log("Fuel level raw response:", fuelLevel);
         if (fuelLevel !== null) {
           console.log("Parsed fuel level value:", fuelLevel);
           setLiveData((prevData) =>
             prevData.map((item) =>
-              item.id === "fuelLevel" ? { ...item, value: fuelLevel } : item
-            )
+              item.id === "fuelLevel" ? { ...item, value: fuelLevel } : item,
+            ),
           );
         }
       } catch (e) {
         console.log("Failed to fetch fuel level:", e);
       }
-
-      // Wait before next command
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
 
       // Fetch intake air temperature
       try {
         console.log("Sending intake air temperature command...");
         const intakeTemp = await obdDataFunctions.getIntakeAirTemperature(
           plxDevice,
-          bluetoothContext.sendCommand
+          bluetoothContext.sendCommand,
         );
         console.log("Intake temp raw response:", intakeTemp);
         if (intakeTemp) {
@@ -325,23 +314,21 @@ export default function LiveDataScreen() {
             prevData.map((item) =>
               item.id === "intakeTemp"
                 ? { ...item, value: intakeTemp.celsius }
-                : item
-            )
+                : item,
+            ),
           );
         }
       } catch (e) {
         console.log("Failed to fetch intake temperature:", e);
       }
-
-      // Wait before next command
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
 
       // Fetch manifold pressure
       try {
         console.log("Sending manifold pressure command...");
         const manifoldPressure = await obdDataFunctions.getManifoldPressure(
           plxDevice,
-          bluetoothContext.sendCommand
+          bluetoothContext.sendCommand,
         );
         console.log("Manifold pressure raw response:", manifoldPressure);
         if (manifoldPressure !== null) {
@@ -350,8 +337,8 @@ export default function LiveDataScreen() {
             prevData.map((item) =>
               item.id === "manifoldPressure"
                 ? { ...item, value: manifoldPressure }
-                : item
-            )
+                : item,
+            ),
           );
         }
       } catch (e) {
@@ -389,40 +376,109 @@ export default function LiveDataScreen() {
   const togglePolling = () => {
     if (isPolling) {
       // Stop polling
-      if (pollInterval) {
-        clearInterval(pollInterval);
-        setPollInterval(null);
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
       }
       setIsPolling(false);
     } else {
       // Start polling every 5 seconds (increased due to voltage command timing)
       const interval = setInterval(fetchLiveData, 5000);
-      setPollInterval(interval);
+      pollIntervalRef.current = interval;
       setIsPolling(true);
       fetchLiveData(); // Initial fetch
+    }
+  };
+
+  // Test VIN retrieval
+  const testVIN = async () => {
+    const { plxDevice, isConnected, sendCommand } = bluetoothContext;
+
+    if (!isConnected || !plxDevice) {
+      console.log("❌ TEST VIN: No connection to OBD-II device");
+      Alert.alert("No Connection", "Please connect to an OBD-II device first.");
+      return;
+    }
+
+    console.log("🧪 TEST VIN: Starting VIN test...");
+    try {
+      const obdService = createOBDService(plxDevice, sendCommand, (msg) =>
+        console.log(`[TEST VIN] ${msg}`),
+      );
+
+      const vin = await obdService.getVIN();
+
+      if (vin) {
+        console.log("✅ TEST VIN: Successfully retrieved VIN:", vin);
+        Alert.alert("VIN Retrieved", `VIN: ${vin}`);
+      } else {
+        console.log("❌ TEST VIN: Failed to retrieve VIN");
+        Alert.alert("VIN Test", "Failed to retrieve VIN from vehicle");
+      }
+    } catch (error) {
+      console.log("❌ TEST VIN: Error:", error);
+      Alert.alert("VIN Test Error", String(error));
+    }
+  };
+
+  // Test DTC retrieval
+  const testDTC = async () => {
+    const { plxDevice, isConnected, sendCommand } = bluetoothContext;
+
+    if (!isConnected || !plxDevice) {
+      console.log("❌ TEST DTC: No connection to OBD-II device");
+      Alert.alert("No Connection", "Please connect to an OBD-II device first.");
+      return;
+    }
+
+    console.log("🧪 TEST DTC: Starting DTC scan...");
+    try {
+      const obdService = createOBDService(plxDevice, sendCommand, (msg) =>
+        console.log(`[TEST DTC] ${msg}`),
+      );
+
+      const dtcs = await obdService.getDTCs();
+
+      if (dtcs.length > 0) {
+        console.log(`✅ TEST DTC: Found ${dtcs.length} code(s):`, dtcs);
+        const dtcList = dtcs.map(d => `${d.code}: ${d.description}`).join('\n');
+        Alert.alert(
+          `DTCs Found (${dtcs.length})`,
+          dtcList,
+          [{ text: "OK" }],
+          { cancelable: true }
+        );
+      } else {
+        console.log("✅ TEST DTC: No DTCs found (vehicle is healthy)");
+        Alert.alert("No DTCs", "No diagnostic trouble codes found. Vehicle is healthy!");
+      }
+    } catch (error) {
+      console.log("❌ TEST DTC: Error:", error);
+      Alert.alert("DTC Test Error", String(error));
     }
   };
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (pollInterval) {
-        clearInterval(pollInterval);
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
       }
     };
-  }, [pollInterval]);
+  }, []);
 
   // Stop polling when screen loses focus
   useFocusEffect(
     useCallback(() => {
       return () => {
-        if (pollInterval) {
-          clearInterval(pollInterval);
-          setPollInterval(null);
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
           setIsPolling(false);
         }
       };
-    }, [pollInterval])
+    }, []),
   );
 
   // Set up navigation header
@@ -430,29 +486,24 @@ export default function LiveDataScreen() {
     navigation.setOptions({
       headerTitle: "Live Data",
       headerRight: () => (
-        <TouchableOpacity
-          onPress={togglePolling}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginRight: 16,
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            borderRadius: 6,
-            backgroundColor: isPolling ? colors.red[500] : colors.green[500],
-          }}
-        >
-          <Feather
-            name={isPolling ? "pause" : "play"}
-            size={16}
-            color={colors.white}
-            style={{ marginRight: 4 }}
-          />
-          <Text
-            style={{ color: colors.white, fontSize: 12, fontWeight: "600" }}
-          >
-            {isPolling ? "Stop" : "Start"}
-          </Text>
+        <TouchableOpacity onPress={togglePolling}>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Feather
+              name={isPolling ? "pause" : "play"}
+              size={16}
+              color={colors.primary[500]}
+              style={{ marginRight: 4 }}
+            />
+            <Text
+              style={{
+                color: colors.primary[500],
+                fontSize: 16,
+                fontWeight: "600",
+              }}
+            >
+              {isPolling ? "Stop" : "Start"}
+            </Text>
+          </View>
         </TouchableOpacity>
       ),
     });
@@ -466,8 +517,10 @@ export default function LiveDataScreen() {
   const secondaryData = sortedData.slice(4);
 
   return (
-    <SafeAreaView style={[styles.container, isDark && styles.containerDark]}
-    edges={['bottom','left', 'right']}>
+    <SafeAreaView
+      style={[styles.container, isDark && styles.containerDark]}
+      edges={["bottom", "left", "right"]}
+    >
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -509,6 +562,20 @@ export default function LiveDataScreen() {
               )}
             </CardContent>
           </Card>
+
+          {/* Test Buttons */}
+          {bluetoothContext.isConnected && (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity style={[styles.testVinButton, { flex: 1 }]} onPress={testVIN}>
+                <Feather name="info" size={16} color={colors.primary[500]} />
+                <Text style={styles.testVinButtonText}>Test VIN</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.testVinButton, { flex: 1 }]} onPress={testDTC}>
+                <Feather name="alert-circle" size={16} color={colors.yellow[500]} />
+                <Text style={styles.testVinButtonText}>Test DTC</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Primary Data Grid */}
           <Text style={[styles.sectionTitle, isDark && styles.textLight]}>
@@ -700,5 +767,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     color: colors.gray[500],
+  },
+  testVinButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary[50],
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    gap: 8,
+  },
+  testVinButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.primary[500],
   },
 });

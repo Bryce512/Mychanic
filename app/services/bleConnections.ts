@@ -1,20 +1,28 @@
+/**
+ * BLE Connection Service - Simplified
+ * Handles Bluetooth Low Energy connection management only
+ * OBD-II specific logic should be in obdService.ts
+ */
 import { useState, useEffect, useRef } from "react";
+import { PermissionsAndroid, Platform } from "react-native";
 import {
-  PermissionsAndroid,
-  Platform,
-} from "react-native";
-import { BleManager as BlePlxManager, Device, State, Subscription } from "react-native-ble-plx";
+  BleManager as BlePlxManager,
+  Device,
+  State,
+  Subscription,
+} from "react-native-ble-plx";
 import base64 from "react-native-base64";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Buffer } from "buffer";
 
 // Constants
 const SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb";
 const WRITE_UUID = "0000fff2-0000-1000-8000-00805f9b34fb";
 const READ_UUID = "0000fff1-0000-1000-8000-00805f9b34fb";
 const REMEMBERED_DEVICE_KEY = "@MychanicApp:rememberedDevice";
+const COMMAND_TIMEOUT_MS = 5000;
+const MAX_RETRIES = 2;
 
-// Single BLE manager instance for the entire app
+// Single BLE manager instance
 const bleManager = new BlePlxManager();
 
 // Types
@@ -25,82 +33,58 @@ export interface BluetoothDevice {
   isConnectable?: boolean;
 }
 
-// Pure utility functions (not dependent on hook state)
-export const stringToBytes = (str: string): number[] => {
-  const bytes = [];
-  for (let i = 0; i < str.length; i++) {
-    bytes.push(str.charCodeAt(i));
-  }
-  return bytes;
-};
-
-export const base64ToBytes = (b64: string): number[] => {
-  try {
-    const decoded = base64.decode(b64);
-    const bytes = [];
-    for (let i = 0; i < decoded.length; i++) {
-      bytes.push(decoded.charCodeAt(i));
-    }
-    return bytes;
-  } catch (error) {
-    console.log(
-      `Error converting base64 to bytes: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
-    return [];
-  }
-};
-
-// Main BLE hook
-export const useBleConnection = (options?: {
-  onConnectionChange?: (connected: boolean, id: string | null) => void;
+export interface BleConnectionOptions {
+  onConnectionChange?: (connected: boolean, deviceId: string | null) => void;
   onLogMessage?: (message: string) => void;
-}) => {
-  // State variables
+}
+
+/**
+ * Main BLE Connection Hook
+ * Provides clean API for Bluetooth connectivity
+ */
+export const useBleConnection = (options?: BleConnectionOptions) => {
+  // Connection state
   const [isScanning, setIsScanning] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const [voltage, setVoltage] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(null);
-  const [log, setLog] = useState<string[]>([]);
-  const [showDeviceSelector, setShowDeviceSelector] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [isLoadingRemembered, setIsLoadingRemembered] = useState(false);
-  const [discoveredDevices, setDiscoveredDevices] = useState<BluetoothDevice[]>([]);
-  const lastSuccessfulCommandTime = useRef<number | null>(null);
-  const [rememberedDevice, setRememberedDevice] = useState<BluetoothDevice | null>(null);
+  const [deviceName, setDeviceName] = useState<string | null>(null);
   const [plxDevice, setPlxDevice] = useState<Device | null>(null);
 
-  // Characteristic UUIDs
-  const [writeServiceUUID, setWriteServiceUUID] = useState<string>(SERVICE_UUID);
-  const [writeCharUUID, setWriteCharUUID] = useState<string>(
-    "0000fff2-0000-1000-8000-00805f9b34fb"
+  // Discovery
+  const [discoveredDevices, setDiscoveredDevices] = useState<BluetoothDevice[]>(
+    [],
   );
-  const [readCharUUID, setReadCharUUID] = useState<string>(
-    "0000fff1-0000-1000-8000-00805f9b34fb"
-  );
+  const [rememberedDevice, setRememberedDevice] =
+    useState<BluetoothDevice | null>(null);
 
-  const connectionLockTime = useRef<number | null>(null);
+  // Internal state
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [log, setLog] = useState<string[]>([]);
+  const lastCommandTime = useRef<number | null>(null);
+  const connectionLock = useRef<boolean>(false);
+
+  // Subscriptions
   const stateSubscription = useRef<Subscription | null>(null);
   const disconnectSubscription = useRef<Subscription | null>(null);
 
-  useEffect(() => {
-    if (isInitialized) {
-      logMessage("[BLE] Already initialized, skipping");
-      return;
-    }
+  // Characteristic UUIDs (can be updated during discovery)
+  const [writeServiceUUID, setWriteServiceUUID] =
+    useState<string>(SERVICE_UUID);
+  const [writeCharUUID, setWriteCharUUID] = useState<string>(WRITE_UUID);
+  const [readCharUUID, setReadCharUUID] = useState<string>(READ_UUID);
 
-    logMessage("[BLE] useEffect mount: initializing BLE and loading remembered device");
+  // Initialize on mount
+  useEffect(() => {
+    if (isInitialized) return;
 
     const initialize = async () => {
       try {
         await initializeBLE();
+        await loadRememberedDevice();
         setIsInitialized(true);
       } catch (error) {
         logMessage(
-          `❌ Initialization failed: ${
-            error instanceof Error ? error.message : String(error)
-          }`
+          `❌ Initialization error: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     };
@@ -108,209 +92,87 @@ export const useBleConnection = (options?: {
     initialize();
 
     return () => {
-      logMessage("🧹 Cleaning up BLE subscriptions");
       stateSubscription.current?.remove();
       disconnectSubscription.current?.remove();
       bleManager.stopDeviceScan();
     };
   }, []);
 
-  // Helper functions
+  // Helper: Log message
   const logMessage = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     const logEntry = `[${timestamp}] ${message}`;
-    setLog((prev) => [...prev, logEntry]);
+    setLog((prev) => [...prev.slice(-50), logEntry]); // Keep last 50 messages
     console.log(logEntry);
-
-    if (options?.onLogMessage) {
-      options.onLogMessage(logEntry);
-    }
+    options?.onLogMessage?.(logEntry);
   };
 
-  const isLocked = () => {
-    if (connectionLockTime.current === null) return false;
-    const now = Date.now();
-    const lockExpired = now - connectionLockTime.current > 15000;
-
-    if (lockExpired) {
-      logMessage("🔓 Connection lock expired automatically - clearing stale lock");
-      connectionLockTime.current = null;
-      return false;
-    }
-    return true;
-  };
-
-  const forceClearLock = () => {
-    if (connectionLockTime.current !== null) {
-      logMessage("🔓 Forcibly clearing connection lock");
-      connectionLockTime.current = null;
-    }
-  };
-
-  const setLock = () => {
-    connectionLockTime.current = Date.now();
-  };
-
-  const releaseLock = () => {
-    connectionLockTime.current = null;
-    logMessage("🔓 Releasing connection lock");
-  };
-
+  // Initialize BLE
   const initializeBLE = async () => {
-    logMessage("🔄 Initializing Bluetooth module...");
+    logMessage("🔄 Initializing Bluetooth...");
 
     stateSubscription.current = bleManager.onStateChange((state) => {
-      logMessage(`🔵 Bluetooth state changed: ${state}`);
+      logMessage(`🔵 Bluetooth state: ${state}`);
     }, true);
 
     const state = await bleManager.state();
-    logMessage(`📱 Bluetooth state: ${state}`);
-
-    if (!isConnected) {
-      await loadRememberedDevice();
-    }
+    logMessage(`📱 Current Bluetooth state: ${state}`);
   };
 
-  const setupDisconnectListener = (connectedDeviceId: string) => {
-    disconnectSubscription.current?.remove();
-    disconnectSubscription.current = bleManager.onDeviceDisconnected(
-      connectedDeviceId,
-      (error, device) => {
-        logMessage(`🔌 Device disconnected: ${device?.id ?? connectedDeviceId}`);
-        setIsConnected(false);
-        setDeviceId(null);
-        setPlxDevice(null);
-        disconnectSubscription.current?.remove();
-        disconnectSubscription.current = null;
-
-        if (options?.onConnectionChange) {
-          options.onConnectionChange(false, null);
-        }
-      }
-    );
-  };
-
-  // Disconnect from device
-  const disconnectDevice = async (targetDeviceId?: string): Promise<boolean> => {
-    const finalDeviceId = targetDeviceId || deviceId;
-
-    if (!finalDeviceId) {
-      logMessage("❌ Cannot disconnect: No device ID specified");
-      return false;
-    }
-
-    logMessage(`📵 Disconnecting from device ${finalDeviceId}...`);
+  // Request permissions
+  const requestPermissions = async (): Promise<boolean> => {
+    logMessage("🔐 Requesting Bluetooth permissions...");
 
     try {
-      await bleManager.cancelDeviceConnection(finalDeviceId);
-      logMessage(`✅ Device disconnected successfully`);
-
-      setIsConnected(false);
-      setDeviceId(null);
-      setPlxDevice(null);
-
-      if (options?.onConnectionChange) {
-        options.onConnectionChange(false, null);
+      if (Platform.OS === "ios") {
+        return true;
       }
 
-      return true;
+      if (Platform.OS === "android") {
+        const apiLevel = Platform.Version;
+
+        if (apiLevel >= 31) {
+          const permissions = await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          ]);
+
+          const allGranted = Object.values(permissions).every(
+            (status) => status === PermissionsAndroid.RESULTS.GRANTED,
+          );
+
+          if (!allGranted) {
+            logMessage("❌ Required permissions not granted");
+            return false;
+          }
+        } else {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          );
+
+          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+            logMessage("❌ Location permission not granted");
+            return false;
+          }
+        }
+
+        logMessage("✅ All permissions granted");
+        return true;
+      }
+
+      return false;
     } catch (error) {
       logMessage(
-        `❌ Error during disconnect: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `❌ Permission error: ${error instanceof Error ? error.message : String(error)}`,
       );
-
-      try {
-        const stillConnected = await bleManager.isDeviceConnected(finalDeviceId);
-        if (!stillConnected) {
-          logMessage("ℹ️ Device is already disconnected");
-          setIsConnected(false);
-          setDeviceId(null);
-          setPlxDevice(null);
-
-          if (options?.onConnectionChange) {
-            options.onConnectionChange(false, null);
-          }
-          return true;
-        }
-      } catch (checkError) {
-        // Ignore errors checking connection state
-      }
-
       return false;
     }
   };
 
-  const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
-
-  const showAllDevices = async () => {
-    logMessage("👁️ Showing all Bluetooth devices, including unnamed ones...");
-
-    const permissionsGranted = await requestPermissions();
-    if (!permissionsGranted) {
-      logMessage("⚠️ Cannot scan: insufficient permissions");
-      return;
-    }
-
-    const state = await bleManager.state();
-    if (state !== State.PoweredOn) {
-      logMessage("❌ Cannot scan: Bluetooth is not enabled");
-      return;
-    }
-
-    try {
-      setIsScanning(true);
-      setShowDeviceSelector(true);
-      logMessage("🔎 Starting scan for ALL BLE devices (including unnamed)...");
-
-      bleManager.startDeviceScan(null, { allowDuplicates: false }, (error, device) => {
-        if (error) {
-          logMessage(`❌ Scan error: ${error.message}`);
-          setIsScanning(false);
-          return;
-        }
-
-        if (device) {
-          logMessage(
-            `🔍 Found device: ${device.name || "Unnamed"} (${device.id}), RSSI: ${device.rssi}`
-          );
-          setDiscoveredDevices((prev) => {
-            const exists = prev.some((d) => d.id === device.id);
-            if (!exists) {
-              return [
-                ...prev,
-                {
-                  id: device.id,
-                  name: device.name || null,
-                  rssi: device.rssi ?? -100,
-                  isConnectable: device.isConnectable ?? true,
-                },
-              ];
-            }
-            return prev;
-          });
-        }
-      });
-
-      setTimeout(() => {
-        bleManager.stopDeviceScan();
-        logMessage("🛑 Scan stopped after timeout");
-        setIsScanning(false);
-      }, 5000);
-    } catch (err) {
-      setIsScanning(false);
-      logMessage(
-        `❌ Error during scan: ${
-          err instanceof Error ? err.message : String(err)
-        }`
-      );
-    }
-  };
-
-  // Scan for devices
+  // Start scanning for devices
   const startScan = async () => {
-    logMessage("🔍 Preparing to scan for Bluetooth devices...");
+    logMessage("🔍 Starting device scan...");
 
     const permissionsGranted = await requestPermissions();
     if (!permissionsGranted) {
@@ -319,8 +181,6 @@ export const useBleConnection = (options?: {
     }
 
     const state = await bleManager.state();
-    logMessage(`Bluetooth state before scan: ${state}`);
-
     if (state !== State.PoweredOn) {
       logMessage("❌ Cannot scan: Bluetooth is not enabled");
       return;
@@ -329,146 +189,69 @@ export const useBleConnection = (options?: {
     try {
       setIsScanning(true);
       setDiscoveredDevices([]);
-      setShowDeviceSelector(true);
-      logMessage("🔎 Starting scan for all BLE devices...");
 
-      bleManager.startDeviceScan(null, { allowDuplicates: false }, (error, device) => {
-        if (error) {
-          logMessage(`❌ Scan error: ${error.message}`);
-          setIsScanning(false);
-          return;
-        }
+      bleManager.startDeviceScan(
+        null,
+        { allowDuplicates: false },
+        (error, device) => {
+          if (error) {
+            logMessage(`❌ Scan error: ${error.message}`);
+            setIsScanning(false);
+            return;
+          }
 
-        if (device && device.name) {
-          logMessage(
-            `🔍 Found named device: ${device.name} (${device.id}), RSSI: ${device.rssi}`
-          );
-          setDiscoveredDevices((prev) => {
-            const exists = prev.some((d) => d.id === device.id);
-            if (!exists) {
-              return [
-                ...prev,
-                {
-                  id: device.id,
-                  name: device.name ?? null,
-                  rssi: device.rssi ?? -100,
-                  isConnectable: device.isConnectable ?? true,
-                },
-              ];
+          if (device) {
+            // Filter for devices named "OBDII" (case insensitive)
+            const deviceName = device.name || "";
+            if (!deviceName.toLowerCase().includes("obdii")) {
+              return; // Skip devices that don't match
             }
-            return prev;
-          });
-        }
-      });
 
+            setDiscoveredDevices((prev) => {
+              const exists = prev.some((d) => d.id === device.id);
+              if (exists) return prev;
+
+              const newDevice: BluetoothDevice = {
+                id: device.id,
+                name: device.name,
+                rssi: device.rssi || 0,
+                isConnectable: device.isConnectable ?? undefined,
+              };
+
+              logMessage(
+                `📡 Found OBDII device: ${device.name || "Unknown"} (${device.id})`,
+              );
+              return [...prev, newDevice];
+            });
+          }
+        },
+      );
+
+      // Stop scan after 4 seconds
       setTimeout(() => {
         bleManager.stopDeviceScan();
-        logMessage("🛑 Scan stopped after timeout");
         setIsScanning(false);
-      }, 10000);
-    } catch (err) {
+        logMessage("🛑 Scan completed");
+      }, 4000);
+    } catch (error) {
       setIsScanning(false);
       logMessage(
-        `❌ Error during scan: ${
-          err instanceof Error ? err.message : String(err)
-        }`
+        `❌ Scan error: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   };
 
-  // Verify connection
-  const verifyConnection = async (targetDeviceId: string): Promise<boolean> => {
-    if (!targetDeviceId) return false;
-
-    try {
-      logMessage(`🔍 Verifying connection to device ${targetDeviceId}...`);
-
-      const connected = await bleManager.isDeviceConnected(targetDeviceId);
-      if (!connected) {
-        logMessage("❌ Device not connected according to BLE manager");
-        return false;
-      }
-
-      try {
-        await bleManager.readRSSIForDevice(targetDeviceId);
-        logMessage("✅ Connection verified - device responded to RSSI request");
-        return true;
-      } catch (rssiError) {
-        logMessage(
-          `❌ Device failed RSSI check: ${
-            rssiError instanceof Error ? rssiError.message : String(rssiError)
-          }`
-        );
-        return false;
-      }
-    } catch (error) {
-      logMessage(
-        `❌ Error verifying connection: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return false;
-    }
-  };
-
-  // Load remembered device
-  const loadRememberedDevice = async () => {
-    if (isLoadingRemembered) {
-      logMessage("⚠️ Already loading remembered device, skipping");
-      return null;
-    }
-
-    if (isConnected) {
-      logMessage("ℹ️ Already connected, skipping remembered device load");
-      return null;
-    }
-
-    setIsLoadingRemembered(true);
-
-    try {
-      logMessage("🔍 Checking for remembered device...");
-      const deviceJson = await AsyncStorage.getItem(REMEMBERED_DEVICE_KEY);
-
-      if (deviceJson) {
-        const remembered: BluetoothDevice = JSON.parse(deviceJson);
-        setRememberedDevice(remembered);
-        logMessage(
-          `✅ Remembered device found: ${
-            remembered.name || "Unnamed device"
-          } (${remembered.id})`
-        );
-
-        // ble-plx handles device discovery internally during connectToDevice
-        logMessage(`Attempting to connect to remembered device ${remembered.id}...`);
-        await connectToDevice(remembered);
-        return remembered;
-      } else {
-        logMessage("ℹ️ No remembered device found");
-        return null;
-      }
-    } catch (error) {
-      logMessage(
-        `❌ Failed to load remembered device: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return null;
-    } finally {
-      setIsLoadingRemembered(false);
-    }
-  };
-
-  // Device connection function
+  // Connect to device
   const connectToDevice = async (device: BluetoothDevice): Promise<boolean> => {
-    if (isLocked()) {
-      logMessage("⚠️ Connection already in progress, cancelling this connection");
+    if (connectionLock.current) {
+      logMessage("⚠️ Connection already in progress");
       return false;
     }
 
-    setLock();
+    connectionLock.current = true;
 
     try {
-      logMessage(`Connecting to ${device.id}...`);
+      logMessage(`🔗 Connecting to ${device.name || device.id}...`);
       bleManager.stopDeviceScan();
 
       const connectedDevice = await bleManager.connectToDevice(device.id);
@@ -476,32 +259,275 @@ export const useBleConnection = (options?: {
 
       const deviceWithServices =
         await connectedDevice.discoverAllServicesAndCharacteristics();
-      logMessage("✅ Services and characteristics discovered");
+      logMessage("✅ Services discovered");
 
+      // Discover and set characteristics
+      await discoverCharacteristics(deviceWithServices);
+
+      // Initialize OBD-II protocol
+      await initializeOBD(deviceWithServices);
+
+      // Update state
       setDeviceId(device.id);
+      setDeviceName(device.name);
       setIsConnected(true);
       setPlxDevice(deviceWithServices);
 
+      // Setup disconnect listener
       setupDisconnectListener(device.id);
 
-      await discoverDeviceProfile(deviceWithServices);
-      await initializeOBD(device.id, deviceWithServices);
+      // Remember device
       await rememberDevice(device);
 
-      if (options?.onConnectionChange) {
-        options.onConnectionChange(true, device.id);
-      }
+      options?.onConnectionChange?.(true, device.id);
 
-      releaseLock();
+      logMessage(`✅ Successfully connected to ${device.name || device.id}`);
       return true;
     } catch (error) {
-      logMessage(`❌ Connection failed: ${String(error)}`);
-      releaseLock();
+      logMessage(
+        `❌ Connection failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    } finally {
+      connectionLock.current = false;
+    }
+  };
+
+  // Disconnect from device
+  const disconnectDevice = async (): Promise<boolean> => {
+    if (!deviceId) {
+      logMessage("⚠️ No device to disconnect");
+      return false;
+    }
+
+    try {
+      logMessage(`📵 Disconnecting from ${deviceName || deviceId}...`);
+      await bleManager.cancelDeviceConnection(deviceId);
+
+      setIsConnected(false);
+      setDeviceId(null);
+      setDeviceName(null);
+      setPlxDevice(null);
+
+      options?.onConnectionChange?.(false, null);
+
+      logMessage("✅ Disconnected successfully");
+      return true;
+    } catch (error) {
+      logMessage(
+        `❌ Disconnect error: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return false;
     }
   };
 
-  // Reconnect to previously used device
+  // Setup disconnect listener
+  const setupDisconnectListener = (deviceId: string) => {
+    disconnectSubscription.current?.remove();
+    disconnectSubscription.current = bleManager.onDeviceDisconnected(
+      deviceId,
+      (error, device) => {
+        logMessage(`🔌 Device disconnected: ${device?.id || deviceId}`);
+        setIsConnected(false);
+        setDeviceId(null);
+        setDeviceName(null);
+        setPlxDevice(null);
+        options?.onConnectionChange?.(false, null);
+      },
+    );
+  };
+
+  // Discover characteristics
+  const discoverCharacteristics = async (device: Device): Promise<void> => {
+    try {
+      logMessage("🔍 Discovering characteristics...");
+
+      const services = await device.services();
+      const obdServiceIds = ["fff0", "ffe0", "ffb0"];
+
+      for (const service of services) {
+        const serviceIdShort = service.uuid.substring(4, 8).toLowerCase();
+
+        if (obdServiceIds.includes(serviceIdShort)) {
+          logMessage(`✅ Found OBD service: ${service.uuid}`);
+          setWriteServiceUUID(service.uuid);
+
+          const characteristics = await service.characteristics();
+
+          for (const char of characteristics) {
+            const charIdShort = char.uuid.substring(4, 8).toLowerCase();
+
+            if (char.isWritableWithResponse || char.isWritableWithoutResponse) {
+              logMessage(`✅ Write characteristic: ${char.uuid}`);
+              setWriteCharUUID(char.uuid);
+            }
+
+            if (char.isNotifiable) {
+              logMessage(`✅ Read characteristic: ${char.uuid}`);
+              setReadCharUUID(char.uuid);
+            }
+          }
+
+          return;
+        }
+      }
+
+      logMessage("⚠️ Using default characteristics");
+    } catch (error) {
+      logMessage(
+        `❌ Characteristic discovery error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+
+  // Initialize OBD-II protocol
+  const initializeOBD = async (device: Device): Promise<void> => {
+    logMessage("🚗 Initializing OBD-II protocol...");
+
+    try {
+      // Test if device is already initialized by trying a simple command
+      try {
+        const testResponse = await sendCommand(device, "ATI", 1, 2000);
+        if (testResponse && testResponse.length > 0) {
+          logMessage("✅ OBD-II device already initialized");
+          return;
+        }
+      } catch (error) {
+        logMessage("⚠️ Device not responding, will initialize...");
+      }
+
+      // Only send essential initialization commands
+      // Removed ATZ (reset) - unnecessary and causes delays
+      const commands = ["ATE0", "ATL0", "ATS0", "ATH1", "ATSP0"];
+
+      for (const cmd of commands) {
+        await sendCommand(device, cmd, 1, 3000);
+        await delay(200);
+      }
+
+      logMessage("✅ OBD-II initialized");
+    } catch (error) {
+      logMessage(
+        `⚠️ OBD initialization warning: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+
+  // Send command to device
+  const sendCommand = async (
+    device: Device,
+    command: string,
+    retries = MAX_RETRIES,
+    timeoutMs = COMMAND_TIMEOUT_MS,
+  ): Promise<string> => {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        if (attempt > 0) {
+          logMessage(`🔄 Retry ${attempt}/${retries}: ${command}`);
+          await delay(500 * attempt);
+        }
+
+        // Write command
+        const commandWithCR = command + "\r";
+        const base64Command = base64.encode(commandWithCR);
+
+        await device.writeCharacteristicWithResponseForService(
+          writeServiceUUID,
+          writeCharUUID,
+          base64Command,
+        );
+
+        // Monitor for response
+        let responseData = "";
+        let timeoutHandle: NodeJS.Timeout;
+
+        const responsePromise = new Promise<string>((resolve, reject) => {
+          timeoutHandle = setTimeout(() => {
+            reject(new Error(`Timeout waiting for response to: ${command}`));
+          }, timeoutMs);
+
+          let promptSeenTime: number | null = null;
+          const WAIT_AFTER_PROMPT_MS = 200; // Wait 200ms after seeing prompt to collect remaining data
+
+          device.monitorCharacteristicForService(
+            writeServiceUUID,
+            readCharUUID,
+            (error, characteristic) => {
+              if (error) {
+                clearTimeout(timeoutHandle);
+                reject(error);
+                return;
+              }
+
+              if (characteristic?.value) {
+                const chunk = base64.decode(characteristic.value);
+                responseData += chunk;
+
+                // When we see the prompt character '>', start a timer to wait for any remaining data
+                if (chunk.includes(">") && !promptSeenTime) {
+                  promptSeenTime = Date.now();
+
+                  // Set a short timer to collect any remaining chunks
+                  setTimeout(() => {
+                    clearTimeout(timeoutHandle);
+                    resolve(responseData);
+                  }, WAIT_AFTER_PROMPT_MS);
+                }
+              }
+            },
+          );
+        });
+
+        const response = await responsePromise;
+        lastCommandTime.current = Date.now();
+        return response;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        if (attempt === retries) {
+          logMessage(
+            `❌ Command failed after ${retries + 1} attempts: ${command}`,
+          );
+        }
+      }
+    }
+
+    throw lastError || new Error(`Command failed: ${command}`);
+  };
+
+  // Remember device
+  const rememberDevice = async (device: BluetoothDevice) => {
+    try {
+      await AsyncStorage.setItem(REMEMBERED_DEVICE_KEY, JSON.stringify(device));
+      setRememberedDevice(device);
+      logMessage(`💾 Device saved: ${device.name || device.id}`);
+    } catch (error) {
+      logMessage(
+        `❌ Failed to save device: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+
+  // Load remembered device
+  const loadRememberedDevice = async () => {
+    try {
+      const deviceJson = await AsyncStorage.getItem(REMEMBERED_DEVICE_KEY);
+
+      if (deviceJson) {
+        const device = JSON.parse(deviceJson);
+        setRememberedDevice(device);
+        logMessage(`📱 Remembered device loaded: ${device.name || device.id}`);
+      }
+    } catch (error) {
+      logMessage(
+        `❌ Failed to load remembered device: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+
+  // Connect to remembered device
   const connectToRememberedDevice = async (): Promise<boolean> => {
     if (!rememberedDevice) {
       logMessage("ℹ️ No remembered device found");
@@ -511,442 +537,50 @@ export const useBleConnection = (options?: {
     return connectToDevice(rememberedDevice);
   };
 
-  // Save device for later use
-  const rememberDevice = async (device: BluetoothDevice) => {
-    try {
-      await AsyncStorage.setItem(REMEMBERED_DEVICE_KEY, JSON.stringify(device));
-      setRememberedDevice(device);
-      logMessage(
-        `💾 Device saved for future connections: ${
-          device.name || "Unnamed device"
-        }`
-      );
-    } catch (error) {
-      logMessage(
-        `❌ Failed to save device: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-  };
-
-  // Forget previously remembered device
+  // Forget remembered device
   const forgetRememberedDevice = async () => {
     try {
       await AsyncStorage.removeItem(REMEMBERED_DEVICE_KEY);
       setRememberedDevice(null);
-      logMessage("🗑️ Remembered device has been forgotten");
+      logMessage("🗑️ Remembered device forgotten");
     } catch (error) {
       logMessage(
-        `❌ Failed to forget device: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `❌ Failed to forget device: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   };
 
-  // Request permissions
-  const requestPermissions = async () => {
-    logMessage("🔐 Requesting Bluetooth permissions...");
+  // Utility: delay
+  const delay = (ms: number) =>
+    new Promise((resolve) => setTimeout(resolve, ms));
 
-    try {
-      if (Platform.OS === "ios") {
-        logMessage("📱 iOS detected, no explicit permission requests needed");
-        return true;
-      } else if (Platform.OS === "android") {
-        logMessage(`📱 Android API level ${Platform.Version} detected`);
-
-        let permissionsToRequest: string[] = [];
-        let permissionResults = {};
-
-        if (Platform.Version >= 31) {
-          // Android 12+
-          logMessage("Requesting Android 12+ permissions");
-          permissionsToRequest = [
-            PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          ];
-        } else if (Platform.Version >= 23) {
-          logMessage("Requesting Android 6-11 permissions");
-          permissionsToRequest = [
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          ];
-        }
-
-        permissionResults = await PermissionsAndroid.requestMultiple(
-          permissionsToRequest as any
-        );
-
-        Object.entries(permissionResults).forEach(([permission, result]) => {
-          logMessage(`Permission ${permission}: ${result}`);
-        });
-
-        const denied = Object.values(permissionResults).includes(
-          PermissionsAndroid.RESULTS.DENIED
-        );
-        if (denied) {
-          logMessage("❌ Some permissions were denied!");
-        } else {
-          logMessage("✅ All permissions granted");
-        }
-
-        return !denied;
-      }
-    } catch (error) {
-      logMessage(
-        `❌ Error requesting permissions: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return false;
-    }
-  };
-
-  // Discover device characteristics using ble-plx Device
-  const discoverDeviceProfile = async (device: Device): Promise<boolean> => {
-    try {
-      logMessage(`🔍 Discovering device profile...`);
-
-      const services = await device.services();
-      logMessage(`✅ Discovered ${services.length} services:`);
-
-      const obdServiceIds = ["fff0", "ffe0", "ffb0"];
-
-      for (const service of services) {
-        const serviceUUID = service.uuid.toLowerCase();
-        logMessage(`Service: ${serviceUUID}`);
-
-        const isPotentialOBDService =
-          obdServiceIds.some((id) => serviceUUID.includes(id)) ||
-          serviceUUID === SERVICE_UUID.toLowerCase();
-
-        if (isPotentialOBDService) {
-          logMessage(`✅ Found potential OBD service: ${serviceUUID}`);
-          setWriteServiceUUID(service.uuid);
-
-          if (serviceUUID.includes("fff0")) {
-            logMessage(`Using standard OBD characteristic pattern`);
-            return true;
-          } else if (serviceUUID.includes("ffe0")) {
-            setWriteCharUUID("ffe1");
-            return true;
-          } else if (serviceUUID.includes("ffb0")) {
-            setWriteCharUUID("ffb2");
-            return true;
-          }
-        }
-      }
-
-      logMessage(`⚠️ Could not identify suitable OBD service, using defaults`);
-      setWriteServiceUUID("0000fff0-0000-1000-8000-00805f9b34fb");
-      setWriteCharUUID("0000fff2-0000-1000-8000-00805f9b34fb");
-      return false;
-    } catch (error) {
-      logMessage(
-        `❌ Error in device profile discovery: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return false;
-    }
-  };
-
-  // Initialize OBD device
-  const initializeOBD = async (
-    targetDeviceId?: string | null,
-    device?: Device | null
-  ): Promise<boolean> => {
-    const finalDeviceId = targetDeviceId || deviceId;
-    const finalDevice = device || plxDevice;
-
-    if (!finalDeviceId) {
-      logMessage("❌ Cannot initialize OBD: No device ID available");
-      return false;
-    }
-
-    if (!finalDevice) {
-      logMessage("❌ No PLX device available for reset");
-      return false;
-    }
-
-    try {
-      logMessage("🔄 Initializing OBD-II adapter...");
-      await delay(500);
-
-      logMessage("Sending reset command: ATZ");
-      await sendCommand(finalDevice, "ATZ");
-
-      logMessage("Waiting for device to reset...");
-      await delay(500);
-
-      const commands = [
-        "ATL0", // Turn off linefeeds
-        "ATH0", // Turn off headers
-        "ATE0", // Turn off echo
-        "ATS0", // Turn off spaces
-        "ATI",  // Get version info
-        "AT SP 0", // Set protocol to auto
-      ];
-
-      for (const cmd of commands) {
-        logMessage(`Sending init command: ${cmd}`);
-        await delay(100);
-      }
-
-      logMessage("✅ OBD initialization sequence completed");
-      return true;
-    } catch (error) {
-      logMessage(
-        `❌ OBD initialization failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return false;
-    }
-  };
-
-  const wakeUpDevice = async (device: Device): Promise<boolean> => {
-    try {
-      logMessage("💤 Performing full OBD device wake-up sequence...");
-
-      try {
-        const wakeupCmd = Buffer.from("\r", "utf8").toString("base64");
-        await device.writeCharacteristicWithResponseForService(
-          SERVICE_UUID,
-          WRITE_UUID,
-          wakeupCmd
-        );
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      } catch (e) {
-        // Ignore wake-up errors
-      }
-
-      lastSuccessfulCommandTime.current = Date.now();
-      return true;
-    } catch (error) {
-      logMessage(`⚠️ Wake-up sequence failed: ${String(error)}`);
-      return false;
-    }
-  };
-
-  const sendCommand = async (
-    device: Device,
-    command: string,
-    retries = 2,
-    customTimeoutMs?: number
-  ): Promise<string> => {
-    if (!device) {
-      console.error("No device connected");
-      throw new Error("No device connected");
-    }
-
-    let lastError: Error | null = null;
-    const now = Date.now();
-    const lastCmdTime = lastSuccessfulCommandTime.current ?? 0;
-    const needsWakeup = now - lastCmdTime > 5000;
-
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        if (needsWakeup && attempt === 0) {
-          logMessage("💤 Device may be sleeping, sending quick wake-up...");
-          try {
-            await wakeUpDevice(device);
-            logMessage("✅ Device wake-up command sent successfully");
-          } catch (wakeupError) {
-            logMessage("Wake-up command ignored error");
-          }
-        } else if (attempt > 0) {
-          logMessage(
-            `📢 Retry attempt ${attempt}/${retries} - sending wake-up signal...`
-          );
-        }
-
-        const encodedCommand = Buffer.from(`${command}\r`, "utf8").toString(
-          "base64"
-        );
-        console.log(
-          `Sending Command (attempt ${attempt + 1}/${retries + 1}):`,
-          command
-        );
-
-        await device.writeCharacteristicWithResponseForService(
-          SERVICE_UUID,
-          WRITE_UUID,
-          encodedCommand
-        );
-
-        const response = await new Promise<string>((resolve, reject) => {
-          let receivedBytes: number[] = [];
-          let responseText = "";
-          let subscription: any = null;
-          let isCompleted = false;
-
-          try {
-            subscription = device.monitorCharacteristicForService(
-              SERVICE_UUID,
-              READ_UUID,
-              (error, characteristic) => {
-                if (isCompleted) return;
-
-                if (error) {
-                  console.error("Error receiving response:", error);
-                  if (subscription) {
-                    try {
-                      subscription.remove();
-                    } catch (removalError) {
-                      // Silently ignore removal errors
-                    }
-                  }
-
-                  if (!isCompleted) {
-                    isCompleted = true;
-                    reject(error);
-                  }
-                  return;
-                }
-
-                if (characteristic?.value) {
-                  const decodedChunk = base64.decode(characteristic.value);
-                  console.log("Received Chunk:", decodedChunk);
-
-                  for (let i = 0; i < decodedChunk.length; i++) {
-                    receivedBytes.push(decodedChunk.charCodeAt(i));
-                  }
-
-                  if (decodedChunk.includes(">")) {
-                    responseText = Buffer.from(receivedBytes)
-                      .toString("utf8")
-                      .trim();
-                    console.log("Full Response (Raw):", responseText);
-
-                    let lines = responseText
-                      .split(/[\r\n]+/)
-                      .map((line) => line.trim())
-                      .filter((line) => line.length > 0 && line !== ">");
-
-                    console.log("Response Lines:", lines);
-
-                    let finalResponse = "";
-
-                    for (let i = 0; i < lines.length; i++) {
-                      const line = lines[i];
-                      if (line.toUpperCase() === command.toUpperCase()) {
-                        console.log("Skipping echo line:", line);
-                        continue;
-                      }
-                      if (line.toUpperCase() === "OK") {
-                        if (finalResponse.length === 0) {
-                          finalResponse = "OK";
-                        }
-                        continue;
-                      }
-                      if (line.length > 0) {
-                        finalResponse = line;
-                        break;
-                      }
-                    }
-
-                    console.log("Parsed Response:", finalResponse);
-                    isCompleted = true;
-
-                    if (subscription) {
-                      try {
-                        subscription.remove();
-                      } catch (removalError) {
-                        console.log("Ignoring subscription removal error");
-                      }
-                    }
-
-                    resolve(finalResponse);
-                  }
-                }
-              }
-            );
-          } catch (subError) {
-            if (!isCompleted) {
-              isCompleted = true;
-              reject(subError);
-            }
-          }
-
-          const timeoutMs =
-            customTimeoutMs || (attempt === retries ? 5000 : 3000);
-          setTimeout(() => {
-            if (!isCompleted) {
-              isCompleted = true;
-              if (subscription) {
-                try {
-                  subscription.remove();
-                } catch (removalError) {
-                  // Silently handle subscription removal errors
-                }
-              }
-
-              if (receivedBytes.length > 0) {
-                const partialResponse = Buffer.from(receivedBytes)
-                  .toString("utf8")
-                  .trim();
-                resolve(partialResponse);
-              } else {
-                reject(new Error(`Command timed out (attempt ${attempt + 1})`));
-              }
-            }
-          }, timeoutMs);
-        });
-
-        lastSuccessfulCommandTime.current = Date.now();
-        return response;
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        console.error(`Error sending command (attempt ${attempt + 1}):`, error);
-
-        if (attempt === retries) {
-          throw lastError;
-        }
-
-        await new Promise((resolve) =>
-          setTimeout(resolve, 500 * (attempt + 1))
-        );
-      }
-    }
-
-    throw lastError || new Error("Unknown command error");
-  };
-
-  // Methods
+  // Return public API
   return {
-    // State Variables
-    voltage,
-    discoveredDevices,
+    // State
     isScanning,
+    isConnected,
+    deviceId,
+    deviceName,
     plxDevice,
+    discoveredDevices,
+    rememberedDevice,
+    log,
+
+    // Characteristic UUIDs
     writeServiceUUID,
     writeCharUUID,
     readCharUUID,
-    deviceId,
-    lastSuccessfulCommandTime,
-    showDeviceSelector,
-    rememberedDevice,
-    isConnected,
-    showAllDevices,
 
     // Methods
-    logMessage,
     startScan,
     connectToDevice,
-    connectToRememberedDevice,
     disconnectDevice,
-    sendCommand,
-    verifyConnection,
-    rememberDevice,
+    connectToRememberedDevice,
     forgetRememberedDevice,
-    initializeOBD,
-    discoverDeviceProfile,
-    forceClearLock,
-    wakeUpDevice,
+    sendCommand,
+    logMessage,
 
-    // Setters for discoveredDevices if needed externally
+    // Setters (for external control)
     setDiscoveredDevices,
   };
 };

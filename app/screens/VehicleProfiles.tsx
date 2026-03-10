@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import {
   View,
   Text,
@@ -33,7 +33,11 @@ const DEFAULT_IMAGE =
 import firebaseService from "../services/firebaseService";
 import { useDiagnostics } from "../contexts/VehicleDiagnosticsContext";
 import { obdDataFunctions } from "../services/obdService";
-import { Alert } from "react-native";
+import { Alert, Modal, FlatList, ActivityIndicator } from "react-native";
+import BluetoothDeviceSelector from "../components/BluetoothDeviceSelector";
+import type { BluetoothDevice } from "../services/bleConnections";
+import { vehicleDataService } from "../services/vehicleDataService";
+import { transparent } from "react-native-paper/lib/typescript/styles/themes/v2/colors";
 
 const VEHICLES_CACHE_KEY = "@MychanicApp:vehiclesCache";
 const VEHICLE_ORDER_KEY = "@MychanicApp:vehicleOrder";
@@ -58,6 +62,15 @@ export default function VehicleProfilesScreen() {
   const isFocused = useIsFocused();
   const styles = vehicleProfileStyles;
   const cacheRef = useRef<CachedVehiclesData | null>(null);
+
+  // VIN scanning state
+  const [showBLEScanner, setShowBLEScanner] = useState(false);
+  const [scanningVIN, setScanningVIN] = useState(false);
+  const [showVehicleSelector, setShowVehicleSelector] = useState(false);
+  const [scannedVehicleData, setScannedVehicleData] = useState<any>(null);
+  const [showActionSelector, setShowActionSelector] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState<BluetoothDevice | null>(null);
+  const [showDeviceActionSelector, setShowDeviceActionSelector] = useState(false);
 
   // Check if cache is still valid
   const isCacheValid = (): boolean => {
@@ -181,6 +194,272 @@ export default function VehicleProfilesScreen() {
     });
   };
 
+  // Handle + button press - show action selector
+  const handleAddAction = () => {
+    setShowActionSelector(true);
+  };
+
+  // Handle "Add Scanner" action
+  const handleAddScanner = async () => {
+    setShowActionSelector(false);
+    try {
+      setShowBLEScanner(true);
+      await bluetoothContext.startScan();
+    } catch (error) {
+      console.error("Failed to start scan:", error);
+      Alert.alert("Error", "Failed to start scanning for devices");
+      setShowBLEScanner(false);
+    }
+  };
+
+  // Handle "Add Vehicle" action
+  const handleAddVehicle = () => {
+    setShowActionSelector(false);
+    navigation.navigate("AddVehicle");
+  };
+
+  // Handle device selection from BLE scanner
+  const handleBLEDeviceSelected = async (device: BluetoothDevice): Promise<boolean> => {
+    setSelectedDevice(device);
+    setShowBLEScanner(false);
+    setShowDeviceActionSelector(true);
+    return true;
+  };
+
+  // Handle device action: Add to existing vehicle
+  const handleAddToExistingVehicle = async () => {
+    if (!selectedDevice) return;
+
+    setShowDeviceActionSelector(false);
+    setScanningVIN(true);
+
+    try {
+      // Scan for VIN
+      const vehicleInfo = await bluetoothContext.scanDeviceForVIN(selectedDevice);
+
+      if (!vehicleInfo || !vehicleInfo.vin) {
+        // No VIN available - show vehicle selector for manual association
+        setScannedVehicleData({ deviceId: selectedDevice.id });
+        setShowVehicleSelector(true);
+        setScanningVIN(false);
+        
+        // Show message about VIN not supported
+        Alert.alert(
+          "VIN Not Available",
+          "This vehicle doesn't support VIN retrieval from OBD-II. You can manually select which vehicle to associate with this scanner.",
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
+      // VIN available - check for matching vehicle
+      const matchingVehicle = vehicles.find(v => v.vin === vehicleInfo.vin);
+
+      if (matchingVehicle) {
+        // Auto-associate with matching vehicle
+        await firebaseService.updateVehicle(matchingVehicle.id, {
+          obdUUID: selectedDevice.id,
+        });
+
+        Alert.alert(
+          "Scanner Connected",
+          `Successfully connected scanner to your ${matchingVehicle.year || ""} ${matchingVehicle.make || ""} ${matchingVehicle.model || ""}`.trim(),
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                setScanningVIN(false);
+                setSelectedDevice(null);
+                refreshVehicles();
+              },
+            },
+          ]
+        );
+      } else {
+        // No matching vehicle - offer to update existing or create new
+        setScannedVehicleData(vehicleInfo);
+        const vehicleDescription = `${vehicleInfo.year || ""} ${vehicleInfo.make || ""} ${vehicleInfo.model || ""}`.trim() || "unknown vehicle";
+
+        Alert.alert(
+          "Vehicle Found",
+          `Found a ${vehicleDescription}. Select an existing vehicle to update or create a new one.`,
+          [
+            {
+              text: "Select Vehicle",
+              onPress: () => {
+                setScanningVIN(false);
+                setShowVehicleSelector(true);
+              },
+            },
+            {
+              text: "Cancel",
+              style: "cancel",
+              onPress: () => {
+                setScanningVIN(false);
+                setSelectedDevice(null);
+                setScannedVehicleData(null);
+              },
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error("VIN scan error:", error);
+      Alert.alert(
+        "Error",
+        "Failed to retrieve VIN from OBD-II device. You can still manually associate the scanner with a vehicle.",
+        [
+          {
+            text: "Select Vehicle",
+            onPress: () => {
+              setScannedVehicleData({ deviceId: selectedDevice.id });
+              setShowVehicleSelector(true);
+              setScanningVIN(false);
+            },
+          },
+          {
+            text: "Cancel",
+            style: "cancel",
+            onPress: () => {
+              setScanningVIN(false);
+              setSelectedDevice(null);
+            },
+          },
+        ]
+      );
+    }
+  };
+
+  // Handle device action: Create new vehicle
+  const handleCreateNewVehicleWithDevice = async () => {
+    if (!selectedDevice) return;
+
+    setShowDeviceActionSelector(false);
+    setScanningVIN(true);
+
+    try {
+      // Scan for VIN
+      const vehicleInfo = await bluetoothContext.scanDeviceForVIN(selectedDevice);
+
+      setScanningVIN(false);
+
+      if (!vehicleInfo || !vehicleInfo.vin) {
+        // No VIN - navigate to AddVehicle and alert user
+        Alert.alert(
+          "VIN Not Available",
+          "This vehicle doesn't support VIN retrieval from OBD-II. You can still create the vehicle manually and the scanner will be associated with it.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                // Store device ID for association after vehicle creation
+                // Note: You may want to pass this as a route param
+                setSelectedDevice(null);
+                navigation.navigate("AddVehicle");
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      // VIN available - navigate to AddVehicle with pre-filled data
+      // Note: AddVehicle screen should accept these as route params
+      setSelectedDevice(null);
+      navigation.navigate("AddVehicle");
+      
+      Alert.alert(
+        "Vehicle Found",
+        `Found ${vehicleInfo.year || ""} ${vehicleInfo.make || ""} ${vehicleInfo.model || ""}. The vehicle form will be pre-filled with this information.`.trim(),
+        [{ text: "OK" }]
+      );
+    } catch (error) {
+      console.error("VIN scan error:", error);
+      setScanningVIN(false);
+      Alert.alert(
+        "Error",
+        "Failed to retrieve VIN from device. You can still create the vehicle manually.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              setSelectedDevice(null);
+              navigation.navigate("AddVehicle");
+            },
+          },
+        ]
+      );
+    }
+  };
+
+  // Refresh vehicles helper
+  const refreshVehicles = async () => {
+    const currentUser = firebaseService.getCurrentUser();
+    if (currentUser) {
+      const userVehicles = await firebaseService.getVehicles(currentUser.uid);
+      setVehicles(await applyVehicleOrder(userVehicles || []));
+    }
+  };
+
+  // Handle updating an existing vehicle with scanned data
+  const handleUpdateExistingVehicle = async (vehicleId: string) => {
+    setShowVehicleSelector(false);
+
+    if (!scannedVehicleData) return;
+
+    try {
+      const updateData: any = {
+        obdUUID: scannedVehicleData.deviceId,
+      };
+
+      // Only update vehicle info if VIN is available
+      if (scannedVehicleData.vin) {
+        updateData.vin = scannedVehicleData.vin;
+        if (scannedVehicleData.year) updateData.year = parseInt(scannedVehicleData.year);
+        if (scannedVehicleData.make) updateData.make = scannedVehicleData.make;
+        if (scannedVehicleData.model) updateData.model = scannedVehicleData.model;
+      }
+
+      await firebaseService.updateVehicle(vehicleId, updateData);
+
+      Alert.alert(
+        "Success",
+        "Vehicle information updated successfully!",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              setScannedVehicleData(null);
+              // Refresh vehicles
+              const fetchVehicles = async () => {
+                const currentUser = firebaseService.getCurrentUser();
+                if (currentUser) {
+                  const userVehicles = await firebaseService.getVehicles(currentUser.uid);
+                  setVehicles(await applyVehicleOrder(userVehicles || []));
+                }
+              };
+              fetchVehicles();
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error("Error updating vehicle:", error);
+      Alert.alert("Error", "Failed to update vehicle. Please try again.");
+    }
+  };
+
+  // Set navigation header button
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={handleAddAction} style={{ padding: 8}}>
+          <Feather name="plus" size={20} color={colors.primary[500]} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
+
   // Add loading state handling
   if (loading || diagnosticsContext.loading) {
     return (
@@ -194,17 +473,7 @@ export default function VehicleProfilesScreen() {
     );
   }
 
-  // Helper to determine if the connect alert should be shown for the selected vehicle
-  const showConnectAlert = (() => {
-    const { deviceId, isConnected } = bluetoothContext;
-    if (!vehicles[selectedVehicle]) return false;
-    const vehicle = vehicles[selectedVehicle];
-    // Use the correct OBD UUID field (adjust if your DB uses a different field)
-    const expectedUuid = vehicle.obdUUID || vehicle.obdScannerUuid;
-    const vehicleIsConnected =
-      isConnected && deviceId && expectedUuid && deviceId === expectedUuid;
-    return !vehicleIsConnected;
-  })();
+
 
   const renderVehicleItem = ({
     item: vehicle,
@@ -638,60 +907,17 @@ export default function VehicleProfilesScreen() {
                     }}
                   />
                 </View>
-                <View>
-                  <Feather
-                    name="share"
-                    size={22}
-                    color={isDark ? colors.white : colors.primary[500]}
-                    style={{ marginRight: 12 }}
-                    onPress={() => {
-                      navigation.navigate("ShareVehicle" as never);
-                    }}
-                  />
-                </View>
+                <Feather
+                  name="share"
+                  size={22}
+                  color={isDark ? colors.white : colors.primary[500]}
+                  onPress={() => {
+                    navigation.navigate("ShareVehicle");
+                  }}
+                />
               </CardHeader>
 
               <CardContent style={styles.detailsCardContent}>
-                {/* Only show alert if NOT connected */}
-                {showConnectAlert && (
-                  <View
-                    style={[styles.alertCard, isDark && styles.alertCardDark]}
-                  >
-                    <Feather
-                      name="alert-triangle"
-                      size={20}
-                      color={colors.yellow[500]}
-                    />
-                    <View style={styles.alertCardContent}>
-                      <Text
-                        style={[
-                          styles.alertCardTitle,
-                          isDark && styles.textLight,
-                        ]}
-                      >
-                        Connect OBD-II for Enhanced Features
-                      </Text>
-                      <Text
-                        style={[
-                          styles.alertCardText,
-                          isDark && styles.textMutedLight,
-                        ]}
-                      >
-                        Connect your vehicle to an OBD-II scanner to unlock
-                        real-time diagnostics, predictive maintenance, and share
-                        data with mechanics for better service.
-                      </Text>
-                      <Button
-                        title="Connect Now"
-                        onPress={() =>
-                          navigation.navigate("ScanDevices" as never)
-                        }
-                        size="sm"
-                        style={styles.alertCardButton}
-                      />
-                    </View>
-                  </View>
-                )}
                 <View>
                   <Card style={styles.diagnosticsCard}>
                     <CardHeader style={styles.diagnosticsCardHeader}>
@@ -1467,6 +1693,377 @@ export default function VehicleProfilesScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* BLE Scanner Modal */}
+      <BluetoothDeviceSelector
+        visible={showBLEScanner}
+        onClose={() => setShowBLEScanner(false)}
+        devices={bluetoothContext.discoveredDevices}
+        onSelectDevice={handleBLEDeviceSelected}
+        isScanning={bluetoothContext.isScanning}
+        onScanAgain={bluetoothContext.startScan}
+        connectedDeviceId={bluetoothContext.deviceId}
+        connectedDeviceName={bluetoothContext.deviceName}
+        onDisconnect={async () => {
+          await bluetoothContext.disconnectDevice();
+          setShowBLEScanner(false);
+        }}
+      />
+
+      {/* Action Selector Modal (Add Scanner or Add Vehicle) */}
+      <Modal visible={showActionSelector} transparent animationType="fade">
+        <View style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+        }}>
+          <View style={{
+            width: "85%",
+            backgroundColor: isDark ? colors.gray[800] : "white",
+            borderRadius: 16,
+            overflow: "hidden",
+          }}>
+            <View style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: 20,
+              borderBottomWidth: 1,
+              borderBottomColor: isDark ? colors.gray[700] : "#eee",
+            }}>
+              <Text style={{ 
+                fontSize: 20, 
+                fontWeight: "bold",
+                color: isDark ? colors.white : colors.gray[900],
+              }}>
+                What would you like to add?
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowActionSelector(false)}
+              >
+                <Feather name="x" size={24} color={isDark ? colors.gray[400] : "#6b7280"} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={{ padding: 16 }}>
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 20,
+                  backgroundColor: isDark ? colors.gray[700] : "#f9fafb",
+                  borderRadius: 12,
+                  marginBottom: 12,
+                }}
+                onPress={handleAddScanner}
+              >
+                <View style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: colors.primary[100],
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: 16,
+                }}>
+                  <Feather name="bluetooth" size={24} color={colors.primary[500]} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ 
+                    fontSize: 18, 
+                    fontWeight: "600",
+                    color: isDark ? colors.white : colors.gray[900],
+                    marginBottom: 4,
+                  }}>
+                    Add Scanner
+                  </Text>
+                  <Text style={{ 
+                    fontSize: 14, 
+                    color: isDark ? colors.gray[400] : "#6b7280",
+                  }}>
+                    Connect an OBD-II scanner to a vehicle
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={20} color={isDark ? colors.gray[400] : "#9ca3af"} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 20,
+                  backgroundColor: isDark ? colors.gray[700] : "#f9fafb",
+                  borderRadius: 12,
+                }}
+                onPress={handleAddVehicle}
+              >
+                <View style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: colors.green[100],
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: 16,
+                }}>
+                  <Feather name="truck" size={24} color={colors.green[500]} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ 
+                    fontSize: 18, 
+                    fontWeight: "600",
+                    color: isDark ? colors.white : colors.gray[900],
+                    marginBottom: 4,
+                  }}>
+                    Add Vehicle
+                  </Text>
+                  <Text style={{ 
+                    fontSize: 14, 
+                    color: isDark ? colors.gray[400] : "#6b7280",
+                  }}>
+                    Register a new vehicle to your garage
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={20} color={isDark ? colors.gray[400] : "#9ca3af"} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Device Action Selector Modal (Add to existing or create new) */}
+      <Modal visible={showDeviceActionSelector} transparent animationType="fade">
+        <View style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+        }}>
+          <View style={{
+            width: "85%",
+            backgroundColor: isDark ? colors.gray[800] : "white",
+            borderRadius: 16,
+            overflow: "hidden",
+          }}>
+            <View style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: 20,
+              borderBottomWidth: 1,
+              borderBottomColor: isDark ? colors.gray[700] : "#eee",
+            }}>
+              <Text style={{ 
+                fontSize: 20, 
+                fontWeight: "bold",
+                color: isDark ? colors.white : colors.gray[900],
+              }}>
+                Associate Scanner
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowDeviceActionSelector(false);
+                  setSelectedDevice(null);
+                }}
+              >
+                <Feather name="x" size={24} color={isDark ? colors.gray[400] : "#6b7280"} />
+              </TouchableOpacity>
+            </View>
+            
+            {scanningVIN ? (
+              <View style={{ padding: 40, alignItems: "center" }}>
+                <ActivityIndicator size="large" color={colors.primary[500]} />
+                <Text style={{ 
+                  marginTop: 16, 
+                  fontSize: 16,
+                  color: isDark ? colors.gray[400] : "#6b7280",
+                }}>
+                  Scanning for VIN...
+                </Text>
+              </View>
+            ) : (
+              <View style={{ padding: 16 }}>
+                <TouchableOpacity
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    padding: 20,
+                    backgroundColor: isDark ? colors.gray[700] : "#f9fafb",
+                    borderRadius: 12,
+                    marginBottom: 12,
+                  }}
+                  onPress={handleAddToExistingVehicle}
+                >
+                  <View style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: colors.blue[100],
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 16,
+                  }}>
+                    <Feather name="link" size={24} color={colors.blue[500]} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ 
+                      fontSize: 18, 
+                      fontWeight: "600",
+                      color: isDark ? colors.white : colors.gray[900],
+                      marginBottom: 4,
+                    }}>
+                      Add to Existing Vehicle
+                    </Text>
+                    <Text style={{ 
+                      fontSize: 14, 
+                      color: isDark ? colors.gray[400] : "#6b7280",
+                    }}>
+                      Associate this scanner with a vehicle you already have
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={20} color={isDark ? colors.gray[400] : "#9ca3af"} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    padding: 20,
+                    backgroundColor: isDark ? colors.gray[700] : "#f9fafb",
+                    borderRadius: 12,
+                  }}
+                  onPress={handleCreateNewVehicleWithDevice}
+                >
+                  <View style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: colors.green[100],
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 16,
+                  }}>
+                    <Feather name="plus-circle" size={24} color={colors.green[500]} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ 
+                      fontSize: 18, 
+                      fontWeight: "600",
+                      color: isDark ? colors.white : colors.gray[900],
+                      marginBottom: 4,
+                    }}>
+                      Create New Vehicle
+                    </Text>
+                    <Text style={{ 
+                      fontSize: 14, 
+                      color: isDark ? colors.gray[400] : "#6b7280",
+                    }}>
+                      Add a new vehicle and connect this scanner to it
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={20} color={isDark ? colors.gray[400] : "#9ca3af"} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Vehicle Selector Modal */}
+      <Modal visible={showVehicleSelector} transparent animationType="slide">
+        <View style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+        }}>
+          <View style={{
+            width: "90%",
+            maxHeight: "70%",
+            backgroundColor: "white",
+            borderRadius: 12,
+            overflow: "hidden",
+          }}>
+            <View style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: "#eee",
+            }}>
+              <Text style={{ fontSize: 18, fontWeight: "bold" }}>
+                {scannedVehicleData?.vin ? "Select Vehicle to Update" : "Associate Scanner with Vehicle"}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowVehicleSelector(false);
+                  setScannedVehicleData(null);
+                }}
+              >
+                <Feather name="x" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={vehicles}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={{
+                    padding: 16,
+                    borderBottomWidth: 1,
+                    borderBottomColor: "#eee",
+                  }}
+                  onPress={() => handleUpdateExistingVehicle(item.id)}
+                >
+                  <View>
+                    <Text style={{ fontSize: 16, fontWeight: "600" }}>
+                      {item.nickname || `${item.year} ${item.make} ${item.model}`}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                      {item.mileage ? `${item.mileage} miles` : "No mileage recorded"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <Text style={{ padding: 16, textAlign: 'center', color: '#6b7280' }}>
+                  No vehicles found
+                </Text>
+              }
+              ListFooterComponent={
+                <TouchableOpacity
+                  style={{
+                    padding: 16,
+                    borderTopWidth: 2,
+                    borderTopColor: "#e5e7eb",
+                    backgroundColor: "#f9fafb",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                  onPress={() => {
+                    setShowVehicleSelector(false);
+                    setScannedVehicleData(null);
+                    navigation.navigate("AddVehicle");
+                  }}
+                >
+                  <Feather name="plus-circle" size={20} color={colors.primary[500]} />
+                  <Text style={{ 
+                    fontSize: 16, 
+                    fontWeight: "600", 
+                    color: colors.primary[500],
+                    marginLeft: 8,
+                  }}>
+                    Add New Vehicle
+                  </Text>
+                </TouchableOpacity>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

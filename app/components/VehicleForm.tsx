@@ -21,6 +21,11 @@ import {
   VehicleYear,
 } from "../services/vehicleDataService";
 import { Feather } from "@expo/vector-icons";
+import { useBluetooth } from "../contexts/BluetoothContext";
+import { createOBDService } from "../services/obdService";
+import BluetoothDeviceSelector from "./BluetoothDeviceSelector";
+import firebaseService from "../services/firebaseService";
+import type { BluetoothDevice } from "../services/bleConnections";
 
 interface VehicleFormProps {
   initialData?: any;
@@ -70,6 +75,14 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
   const [uploading, setUploading] = useState(false);
   const [vin, setVin] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
+
+  // OBD Scanning state
+  const [showOBDScanner, setShowOBDScanner] = useState(false);
+  const [scanningVIN, setScanningVIN] = useState(false);
+  const [existingVehicles, setExistingVehicles] = useState<any[]>([]);
+  const [showVehicleSelector, setShowVehicleSelector] = useState(false);
+  const [scannedVehicleData, setScannedVehicleData] = useState<any>(null);
+  const bluetoothContext = useBluetooth();
 
   // NHTSA dropdown state
   const [vehicleYears, setVehicleYears] = useState<VehicleYear[]>([]);
@@ -269,6 +282,233 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
     }
   };
 
+  const handleScanVINFromOBD = async () => {
+    // Show modal immediately and start scanning
+    try {
+      setShowOBDScanner(true);
+      await bluetoothContext.startScan();
+    } catch (error) {
+      console.error("Failed to start scan:", error);
+      Alert.alert("Error", "Failed to start scanning for devices");
+      setShowOBDScanner(false);
+    }
+  };
+
+  const handleOBDDeviceSelected = async (
+    device: BluetoothDevice,
+  ): Promise<boolean> => {
+    setScanningVIN(true);
+
+    try {
+      // Connect to the selected device
+      const connected = await bluetoothContext.connectToDevice(device);
+
+      if (!connected || !bluetoothContext.plxDevice) {
+        Alert.alert("Error", "Failed to connect to OBD-II device");
+        setScanningVIN(false);
+        return false;
+      }
+
+      // Wait a moment for connection to stabilize
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Create OBD service and get VIN
+      const obdService = createOBDService(
+        bluetoothContext.plxDevice,
+        bluetoothContext.sendCommand,
+        (msg) => console.log(msg),
+      );
+
+      const vinFromOBD = await obdService.getVIN();
+
+      if (!vinFromOBD) {
+        Alert.alert(
+          "VIN Not Available",
+          "Unable to access VIN from this vehicle. Please create the vehicle manually.",
+        );
+        setScanningVIN(false);
+        setShowOBDScanner(false);
+        return true; // Connection succeeded, but VIN not available
+      }
+
+      // Decode VIN using NHTSA API
+      const response = await fetch(
+        `https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${vinFromOBD}?format=json`,
+      );
+      const data = await response.json();
+
+      if (data.Results && data.Results.length > 0) {
+        const vehicleData: any = { vin: vinFromOBD };
+        data.Results.forEach((result: any) => {
+          switch (result.Variable) {
+            case "Model Year":
+              if (result.Value && result.Value !== "Not Applicable") {
+                vehicleData.year = result.Value;
+              }
+              break;
+            case "Make":
+              if (result.Value && result.Value !== "Not Applicable") {
+                vehicleData.make = result.Value;
+              }
+              break;
+            case "Model":
+              if (result.Value && result.Value !== "Not Applicable") {
+                vehicleData.model = result.Value;
+              }
+              break;
+            case "Engine Model":
+            case "Engine Configuration":
+              if (result.Value && result.Value !== "Not Applicable") {
+                vehicleData.engine = vehicleData.engine
+                  ? `${vehicleData.engine} ${result.Value}`
+                  : result.Value;
+              }
+              break;
+            case "Displacement (L)":
+              if (result.Value && result.Value !== "Not Applicable") {
+                vehicleData.engine = vehicleData.engine
+                  ? `${result.Value}L ${vehicleData.engine}`
+                  : `${result.Value}L`;
+              }
+              break;
+          }
+        });
+
+        setScannedVehicleData(vehicleData);
+
+        // Check if user has existing vehicles
+        const currentUser = firebaseService.getCurrentUser();
+        if (currentUser) {
+          const userVehicles = await firebaseService.getVehicles(
+            currentUser.uid,
+          );
+          if (userVehicles && userVehicles.length > 0) {
+            setExistingVehicles(userVehicles);
+
+            // Show alert asking if they want to create new or edit existing
+            const vehicleDescription =
+              `${vehicleData.year || ""} ${vehicleData.make || ""} ${vehicleData.model || ""}`.trim();
+            Alert.alert(
+              "Vehicle Found",
+              `Found a ${vehicleDescription}. Would you like to create a new vehicle or update an existing one?`,
+              [
+                {
+                  text: "Create New",
+                  onPress: () => {
+                    populateFormWithVehicleData(vehicleData);
+                    setScanningVIN(false);
+                    setShowOBDScanner(false);
+                  },
+                },
+                {
+                  text: "Update Existing",
+                  onPress: () => {
+                    setShowVehicleSelector(true);
+                    setScanningVIN(false);
+                    setShowOBDScanner(false);
+                  },
+                },
+                {
+                  text: "Cancel",
+                  style: "cancel",
+                  onPress: () => {
+                    setScanningVIN(false);
+                    setShowOBDScanner(false);
+                  },
+                },
+              ],
+            );
+          } else {
+            // No existing vehicles, just populate the form
+            populateFormWithVehicleData(vehicleData);
+            Alert.alert(
+              "Success",
+              "Vehicle information retrieved successfully!",
+            );
+            setScanningVIN(false);
+            setShowOBDScanner(false);
+          }
+        } else {
+          // Not logged in, just populate form
+          populateFormWithVehicleData(vehicleData);
+          Alert.alert("Success", "Vehicle information retrieved successfully!");
+          setScanningVIN(false);
+          setShowOBDScanner(false);
+        }
+        return true;
+      } else {
+        Alert.alert(
+          "Error",
+          "Could not retrieve vehicle information for this VIN. Please create the vehicle manually.",
+        );
+        setScanningVIN(false);
+        setShowOBDScanner(false);
+        return true;
+      }
+    } catch (error) {
+      console.error("OBD VIN scan error:", error);
+      Alert.alert(
+        "Error",
+        "Failed to retrieve VIN from OBD-II device. Please try again or enter VIN manually.",
+      );
+      setScanningVIN(false);
+      setShowOBDScanner(false);
+      return false;
+    }
+  };
+
+  const populateFormWithVehicleData = async (vehicleData: any) => {
+    setForm({ ...form, ...vehicleData });
+    setVin(vehicleData.vin || "");
+
+    // Pre-load makes/models for the decoded year/make so dropdowns work
+    if (vehicleData.year) {
+      const makes = await vehicleDataService.getVehicleMakes(
+        parseInt(vehicleData.year),
+      );
+      setVehicleMakes(makes);
+      if (vehicleData.make) {
+        const models = await vehicleDataService.getVehicleModels(
+          vehicleData.make,
+          parseInt(vehicleData.year),
+        );
+        setVehicleModels(models);
+      }
+    }
+  };
+
+  const handleUpdateExistingVehicle = async (vehicleId: string) => {
+    setShowVehicleSelector(false);
+
+    if (!scannedVehicleData) return;
+
+    try {
+      // Update the selected vehicle with the new VIN and vehicle data
+      await firebaseService.updateVehicle(vehicleId, {
+        vin: scannedVehicleData.vin,
+        year: scannedVehicleData.year
+          ? parseInt(scannedVehicleData.year)
+          : undefined,
+        make: scannedVehicleData.make,
+        model: scannedVehicleData.model,
+        engine: scannedVehicleData.engine,
+      });
+
+      Alert.alert("Success", "Vehicle information updated successfully!", [
+        {
+          text: "OK",
+          onPress: () => {
+            // Reset form or navigate back
+            setScannedVehicleData(null);
+          },
+        },
+      ]);
+    } catch (error) {
+      console.error("Error updating vehicle:", error);
+      Alert.alert("Error", "Failed to update vehicle. Please try again.");
+    }
+  };
+
   const pickImage = async () => {
     launchImageLibrary(
       { mediaType: "photo", quality: 0.7, includeBase64: false },
@@ -431,7 +671,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
               Quick Vehicle Lookup
             </Text>
             <Text style={vehicleFormStyles.sectionSubtitle}>
-              Enter VIN to auto-fill vehicle details from NHTSA database
+              Enter VIN manually or scan from your OBD-II device
             </Text>
             <View style={vehicleFormStyles.lookupGroup}>
               <Text style={vehicleFormStyles.lookupLabel}>
@@ -445,11 +685,12 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
                   placeholder="Enter VIN"
                   maxLength={17}
                   autoCapitalize="characters"
+                  editable={!scanningVIN}
                 />
                 <TouchableOpacity
                   style={vehicleFormStyles.lookupButton}
                   onPress={lookupVehicleByVin}
-                  disabled={lookupLoading}
+                  disabled={lookupLoading || scanningVIN}
                 >
                   {lookupLoading ? (
                     <ActivityIndicator size="small" color="#fff" />
@@ -460,6 +701,42 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
                   )}
                 </TouchableOpacity>
               </View>
+              <TouchableOpacity
+                style={[
+                  vehicleFormStyles.lookupButton,
+                  { marginTop: 8, backgroundColor: "#10b981" },
+                ]}
+                onPress={handleScanVINFromOBD}
+                disabled={scanningVIN || lookupLoading}
+              >
+                {scanningVIN ? (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={vehicleFormStyles.lookupButtonText}>
+                      Scanning...
+                    </Text>
+                  </View>
+                ) : (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <Feather name="bluetooth" size={16} color="#fff" />
+                    <Text style={vehicleFormStyles.lookupButtonText}>
+                      Scan from OBD-II
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -655,6 +932,68 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
                   </Text>
                 </TouchableOpacity>
               )}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* OBD Scanner Modal */}
+      <BluetoothDeviceSelector
+        visible={showOBDScanner}
+        onClose={() => setShowOBDScanner(false)}
+        devices={bluetoothContext.discoveredDevices}
+        onSelectDevice={handleOBDDeviceSelected}
+        isScanning={bluetoothContext.isScanning}
+        onScanAgain={bluetoothContext.startScan}
+      />
+
+      {/* Vehicle Selector Modal */}
+      <Modal visible={showVehicleSelector} transparent animationType="slide">
+        <View style={vehicleFormStyles.dropdownModal}>
+          <View style={vehicleFormStyles.dropdownContent}>
+            <View style={vehicleFormStyles.dropdownHeader}>
+              <Text style={vehicleFormStyles.dropdownHeaderText}>
+                Select Vehicle to Update
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowVehicleSelector(false);
+                  setScannedVehicleData(null);
+                }}
+              >
+                <Feather name="x" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={existingVehicles}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={vehicleFormStyles.dropdownItem}
+                  onPress={() => handleUpdateExistingVehicle(item.id)}
+                >
+                  <View>
+                    <Text style={vehicleFormStyles.dropdownItemText}>
+                      {item.nickname ||
+                        `${item.year} ${item.make} ${item.model}`}
+                    </Text>
+                    <Text
+                      style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}
+                    >
+                      {item.mileage
+                        ? `${item.mileage} miles`
+                        : "No mileage recorded"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <Text
+                  style={{ padding: 16, textAlign: "center", color: "#6b7280" }}
+                >
+                  No vehicles found
+                </Text>
+              }
             />
           </View>
         </View>

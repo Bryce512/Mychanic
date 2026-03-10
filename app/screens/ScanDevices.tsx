@@ -1,405 +1,689 @@
-/* eslint-disable no-bitwise */
-
-import React, { useState, useEffect, useCallback } from "react";
+/**
+ * Scan Devices Screen - Professional DTC Scanner
+ * Focused on OBD-II connection and diagnostic trouble code scanning
+ */
+import React, { useState, useEffect } from "react";
 import {
   View,
   ScrollView,
-  TouchableOpacity,
-  Platform,
-  Alert,
   SafeAreaView,
-  StyleSheet,
-  PermissionsAndroid,
   StatusBar,
-  ActivityIndicator,
+  RefreshControl,
+  Alert,
+  StyleSheet,
 } from "react-native";
 import {
   Button,
   Surface,
   Text,
-  Divider,
-  List,
-  IconButton,
   Card,
+  Divider,
+  IconButton,
+  Chip,
+  ActivityIndicator,
 } from "react-native-paper";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
-import { useFocusEffect } from "@react-navigation/native";
-import { useNavigation, useTheme } from "@react-navigation/native";
-import { obdDataFunctions } from "../services/obdService";
-import BluetoothDeviceSelector from "../components/BluetoothDeviceSelector";
+import { useRoute, RouteProp } from "@react-navigation/native";
 import { useBluetooth } from "../contexts/BluetoothContext";
-import firebaseService from "../services/firebaseService";
-import { scanDevicesStyles } from "../theme/styles/ScanDevices.styles";
+import BluetoothDeviceSelector from "../components/BluetoothDeviceSelector";
+import {
+  createOBDService,
+  DiagnosticTroubleCode,
+} from "../services/obdService";
 import { colors } from "../theme/colors";
 
-const ScanDevicesScreen = () => {
-  // Check Bluetooth status before scanning
-  const checkBluetoothAndStartScan = async () => {
-    try {
-      // If we get here, Bluetooth should be on
-      console.log(
-        "Bluetooth is on. Setting showDeviceSelector to true and starting scan.",
-      );
-      setShowDeviceSelector(true);
-      setDiscoveredDevices([]);
-      startScan();
-    } catch (error) {
-      if (error && typeof error === "object" && "message" in error) {
-        console.error(
-          `Error checking Bluetooth: ${(error as { message: string }).message}`,
-        );
-      } else {
-        console.error(`Error checking Bluetooth: ${JSON.stringify(error)}`);
-      }
-    }
-  };
-  // Check Bluetooth status before scanning
-  // (Removed duplicate checkBluetoothAndStartScan definition)
+type ScanDevicesRouteProp = RouteProp<
+  { ScanDevices: { vehicleId?: string } },
+  "ScanDevices"
+>;
 
-  const theme = useTheme();
-  const navigation = useNavigation();
+const ScanDevicesScreen = () => {
+  const route = useRoute<ScanDevicesRouteProp>();
+  const vehicleId = route.params?.vehicleId;
+  // Bluetooth context
   const {
-    voltage,
     isScanning,
     isConnected,
     deviceId,
     deviceName,
     discoveredDevices,
-    setDiscoveredDevices,
+    plxDevice,
     startScan,
-    sendCommand,
     connectToDevice,
     disconnectDevice,
-    robustReconnect,
-    showAllDevices,
-    verifyConnection,
-    rememberedDevice,
-    connectToRememberedDevice,
-    fetchVoltage,
+    sendCommand,
+    logMessage,
   } = useBluetooth();
 
-  // Wrapper to support passing vehicleId to context connectToDevice
-  function connectToDeviceWithVehicle(device: any, vehicleId: string | null) {
-    // Pass device and vehicleId to context connectToDevice
-    return connectToDevice(device, vehicleId ?? undefined);
-  }
-
-  // Local state for device selector modal
+  // Local state
   const [showDeviceSelector, setShowDeviceSelector] = useState(false);
-  // const { getCurrentVoltage, getEngineRPM } = pidCommands();
-  const [rpm, setRpm] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [dtcCodes, setDtcCodes] = useState<DiagnosticTroubleCode[]>([]);
+  const [isScanningDTC, setIsScanningDTC] = useState(false);
+  const [voltage, setVoltage] = useState<string | null>(null);
+  const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchData = async () => {
-    console.log("Fetching data not enabled yet");
+  // Scan for diagnostic trouble codes
+  const scanForDTCs = async () => {
+    if (!plxDevice || !isConnected) {
+      Alert.alert("Not Connected", "Please connect to an OBD-II device first");
+      return;
+    }
+
+    setIsScanningDTC(true);
+
+    try {
+      const obdService = createOBDService(plxDevice, sendCommand, logMessage);
+
+      // Get DTCs
+      const codes = await obdService.getDTCs();
+      setDtcCodes(codes);
+      setLastScanTime(new Date());
+
+      // Also get voltage
+      const voltageData = await obdService.getVoltage();
+      setVoltage(voltageData);
+
+      if (codes.length === 0) {
+        Alert.alert(
+          "No Issues Found",
+          "No diagnostic trouble codes detected. Your vehicle is operating normally.",
+          [{ text: "OK" }],
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        "Scan Failed",
+        `Could not scan for trouble codes: ${error instanceof Error ? error.message : String(error)}`,
+        [{ text: "OK" }],
+      );
+    } finally {
+      setIsScanningDTC(false);
+    }
   };
 
-  // Check Bluetooth status before scanning
-  // (Removed duplicate checkBluetoothAndStartScan definition)
+  // Clear all DTCs
+  const clearDTCs = async () => {
+    if (!plxDevice || !isConnected) {
+      Alert.alert("Not Connected", "Please connect to an OBD-II device first");
+      return;
+    }
 
-  // Main render
+    Alert.alert(
+      "Clear Trouble Codes",
+      "This will clear all diagnostic trouble codes and reset the check engine light. Are you sure?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const obdService = createOBDService(
+                plxDevice,
+                sendCommand,
+                logMessage,
+              );
+              const success = await obdService.clearDTCs();
+
+              if (success) {
+                setDtcCodes([]);
+                Alert.alert(
+                  "Success",
+                  "Diagnostic trouble codes cleared successfully",
+                );
+              } else {
+                Alert.alert(
+                  "Failed",
+                  "Could not clear diagnostic trouble codes",
+                );
+              }
+            } catch (error) {
+              Alert.alert(
+                "Error",
+                `Failed to clear codes: ${error instanceof Error ? error.message : String(error)}`,
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // Handle refresh
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await scanForDTCs();
+    setRefreshing(false);
+  };
+
+  // Handle device connection
+  const handleDeviceConnection = async (device: any): Promise<boolean> => {
+    try {
+      const success = await connectToDevice(device, vehicleId);
+
+      if (success) {
+        // Connection successful, modal will auto-close
+        logMessage(`✅ Successfully connected to ${device.name || device.id}`);
+        if (vehicleId) {
+          logMessage(`💾 Device associated with vehicle ${vehicleId}`);
+        }
+        return true;
+      } else {
+        // Connection failed
+        Alert.alert(
+          "Connection Failed",
+          `Could not connect to ${device.name || device.id}. Please try again.`,
+          [{ text: "OK" }],
+        );
+        return false;
+      }
+    } catch (error) {
+      Alert.alert(
+        "Connection Error",
+        `Error connecting to device: ${error instanceof Error ? error.message : String(error)}`,
+        [{ text: "OK" }],
+      );
+      return false;
+    }
+  };
+
+  // Get severity color
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case "critical":
+        return colors.error[500];
+      case "warning":
+        return colors.warning[500];
+      case "info":
+        return colors.info[500];
+      default:
+        return colors.gray[500];
+    }
+  };
+
+  // Get severity icon
+  const getSeverityIcon = (severity: string) => {
+    switch (severity) {
+      case "critical":
+        return "alert-circle";
+      case "warning":
+        return "alert";
+      case "info":
+        return "information";
+      default:
+        return "help-circle";
+    }
+  };
+
   return (
-    <SafeAreaView style={scanDevicesStyles.container}>
+    <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.gray[50]} />
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <Card style={scanDevicesStyles.connectionCard}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            enabled={isConnected}
+          />
+        }
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text variant="headlineMedium" style={styles.headerTitle}>
+            OBD-II Diagnostics
+          </Text>
+          <Text variant="bodyMedium" style={styles.headerSubtitle}>
+            Scan for diagnostic trouble codes
+          </Text>
+          {vehicleId && !isConnected && (
+            <Chip
+              icon="car"
+              style={styles.vehicleChip}
+              textStyle={styles.vehicleChipText}
+            >
+              Connecting for this vehicle
+            </Chip>
+          )}
+        </View>
+
+        {/* Connection Status Card */}
+        <Card style={styles.card}>
           <Card.Content>
-            <View style={scanDevicesStyles.connectionStatusRow}>
-              <MaterialCommunityIcons
-                name={isConnected ? "bluetooth-connect" : "bluetooth"}
-                size={32}
-                color={isConnected ? colors.primary[500] : colors.gray[500]}
-              />
-              <View style={scanDevicesStyles.connectionTextContainer}>
-                <Text variant="titleMedium">
-                  {isConnected ? "Connected" : "Not Connected"}
+            <View style={styles.connectionHeader}>
+              <View style={styles.connectionIconContainer}>
+                <MaterialCommunityIcons
+                  name={isConnected ? "bluetooth-connect" : "bluetooth"}
+                  size={40}
+                  color={isConnected ? colors.primary[500] : colors.gray[400]}
+                />
+                {isConnected && (
+                  <View style={styles.connectedBadge}>
+                    <MaterialCommunityIcons
+                      name="check"
+                      size={16}
+                      color="#fff"
+                    />
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.connectionInfo}>
+                <Text variant="titleLarge" style={styles.connectionStatus}>
+                  {isConnected ? "Connected" : "Disconnected"}
                 </Text>
                 {deviceName && (
-                  <Text
-                    variant="bodyMedium"
-                    style={scanDevicesStyles.deviceName}
-                  >
+                  <Text variant="bodyMedium" style={styles.deviceName}>
                     {deviceName}
                   </Text>
+                )}
+                {voltage && (
+                  <View style={styles.voltageContainer}>
+                    <MaterialCommunityIcons
+                      name="battery"
+                      size={16}
+                      color={colors.gray[600]}
+                    />
+                    <Text variant="bodySmall" style={styles.voltageText}>
+                      {voltage}V
+                    </Text>
+                  </View>
                 )}
               </View>
             </View>
 
-            <Divider style={scanDevicesStyles.divider} />
+            <Divider style={styles.divider} />
 
-            <View style={scanDevicesStyles.buttonGrid}>
-              {!isConnected ? (
+            {!isConnected ? (
+              <Button
+                mode="contained"
+                onPress={() => {
+                  setShowDeviceSelector(true);
+                  startScan();
+                }}
+                disabled={isScanning}
+                icon={({ size, color }) => (
+                  <MaterialCommunityIcons
+                    name="bluetooth-connect"
+                    size={size}
+                    color={color}
+                  />
+                )}
+                style={styles.button}
+              >
+                {isScanning ? "Scanning..." : "Connect to Device"}
+              </Button>
+            ) : (
+              <View style={styles.buttonRow}>
                 <Button
                   mode="contained"
-                  onPress={checkBluetoothAndStartScan}
-                  disabled={isScanning}
+                  onPress={scanForDTCs}
+                  disabled={isScanningDTC}
+                  loading={isScanningDTC}
                   icon={({ size, color }) => (
                     <MaterialCommunityIcons
-                      name="bluetooth"
+                      name="magnify"
                       size={size}
                       color={color}
                     />
                   )}
-                  style={scanDevicesStyles.actionButton}
+                  style={[styles.button, styles.buttonFlex]}
                 >
-                  {isScanning ? "Scanning..." : "Scan for Devices"}
+                  {isScanningDTC ? "Scanning..." : "Scan for DTCs"}
                 </Button>
-              ) : (
-                <>
-                  <Button
-                    mode="contained"
-                    onPress={fetchData}
-                    loading={refreshing}
-                    icon={({ size, color }) => (
-                      <MaterialCommunityIcons
-                        name="refresh"
-                        size={size}
-                        color={color}
-                      />
-                    )}
-                    style={scanDevicesStyles.actionButton}
-                  >
-                    {refreshing ? "Reading..." : "Read Data"}
-                  </Button>
-                  <Button
-                    mode="outlined"
-                    onPress={disconnectDevice}
-                    icon={({ size, color }) => (
-                      <MaterialCommunityIcons
-                        name="bluetooth-off"
-                        size={size}
-                        color={color}
-                      />
-                    )}
-                    style={scanDevicesStyles.actionButton}
-                  >
-                    Disconnect
-                  </Button>
-                </>
-              )}
-            </View>
+
+                <Button
+                  mode="outlined"
+                  onPress={disconnectDevice}
+                  icon={({ size, color }) => (
+                    <MaterialCommunityIcons
+                      name="bluetooth-off"
+                      size={size}
+                      color={color}
+                    />
+                  )}
+                  style={styles.disconnectButton}
+                >
+                  Disconnect
+                </Button>
+              </View>
+            )}
           </Card.Content>
         </Card>
 
-        {isConnected && (
-          <Card style={scanDevicesStyles.dataCard}>
-            <Card.Title title="Vehicle Data" />
-            <Divider />
+        {/* DTC Results */}
+        {lastScanTime && (
+          <Card style={styles.card}>
             <Card.Content>
-              <List.Item
-                title="Battery Voltage"
-                description={voltage || "Not available"}
-                left={(props) => <List.Icon {...props} icon="car-battery" />}
-              />
-              <Divider style={scanDevicesStyles.itemDivider} />
-              <List.Item
-                title="Engine RPM"
-                description={rpm || "Not available"}
-                left={(props) => <List.Icon {...props} icon="engine" />}
-              />
-            </Card.Content>
-          </Card>
-        )}
+              <View style={styles.dtcHeader}>
+                <View>
+                  <Text variant="titleLarge">Diagnostic Codes</Text>
+                  <Text variant="bodySmall" style={styles.scanTime}>
+                    Last scan: {lastScanTime.toLocaleTimeString()}
+                  </Text>
+                </View>
 
-        {isConnected && (
-          <Card style={scanDevicesStyles.dataCard}>
-            <Card.Title title="Battery Voltage" />
-            <Card.Content>
-              <View style={scanDevicesStyles.dataRow}>
-                <MaterialCommunityIcons
-                  name="battery"
-                  size={24}
-                  color={colors.primary[500]}
-                />
-                <Text style={scanDevicesStyles.dataValue}>
-                  {refreshing ? (
-                    <ActivityIndicator
-                      size="small"
-                      color={colors.primary[500]}
-                    />
-                  ) : (
-                    voltage + "V" || "N/A"
-                  )}
-                </Text>
+                {dtcCodes.length > 0 && (
+                  <Chip
+                    icon={({ size, color }) => (
+                      <MaterialCommunityIcons
+                        name="alert-circle"
+                        size={size}
+                        color={color}
+                      />
+                    )}
+                    style={[
+                      styles.dtcCountChip,
+                      { backgroundColor: colors.error[100] },
+                    ]}
+                    textStyle={{ color: colors.error[700] }}
+                  >
+                    {dtcCodes.length} {dtcCodes.length === 1 ? "Code" : "Codes"}
+                  </Chip>
+                )}
               </View>
 
-              <Button
-                mode="contained"
-                onPress={fetchVoltage}
-                loading={refreshing}
-                style={{ marginTop: 10 }}
-              >
-                Refresh Voltage
-              </Button>
+              <Divider style={styles.divider} />
+
+              {dtcCodes.length === 0 ? (
+                <View style={styles.noDtcContainer}>
+                  <MaterialCommunityIcons
+                    name="check-circle"
+                    size={64}
+                    color={colors.success[500]}
+                  />
+                  <Text variant="titleMedium" style={styles.noDtcTitle}>
+                    No Issues Found
+                  </Text>
+                  <Text variant="bodyMedium" style={styles.noDtcText}>
+                    Your vehicle is operating normally with no diagnostic
+                    trouble codes detected.
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  {dtcCodes.map((dtc, index) => (
+                    <Surface key={index} style={styles.dtcCard} elevation={1}>
+                      <View style={styles.dtcCardHeader}>
+                        <View
+                          style={[
+                            styles.severityBadge,
+                            { backgroundColor: getSeverityColor(dtc.severity) },
+                          ]}
+                        >
+                          <MaterialCommunityIcons
+                            name={getSeverityIcon(dtc.severity)}
+                            size={20}
+                            color="#fff"
+                          />
+                        </View>
+
+                        <View style={styles.dtcCodeContainer}>
+                          <Text variant="titleMedium" style={styles.dtcCode}>
+                            {dtc.code}
+                          </Text>
+                          <Chip
+                            style={styles.severityChip}
+                            textStyle={styles.severityChipText}
+                          >
+                            {dtc.severity.toUpperCase()}
+                          </Chip>
+                        </View>
+                      </View>
+
+                      <Text variant="bodyMedium" style={styles.dtcDescription}>
+                        {dtc.description}
+                      </Text>
+                    </Surface>
+                  ))}
+
+                  <Button
+                    mode="outlined"
+                    onPress={clearDTCs}
+                    icon={({ size, color }) => (
+                      <MaterialCommunityIcons
+                        name="broom"
+                        size={size}
+                        color={color}
+                      />
+                    )}
+                    style={styles.clearButton}
+                    textColor={colors.error[500]}
+                  >
+                    Clear All Codes
+                  </Button>
+                </>
+              )}
             </Card.Content>
           </Card>
         )}
 
-        {/* Import the device selector component */}
-        <>
-          {console.log(
-            "Rendering BluetoothDeviceSelector. showDeviceSelector:",
-            showDeviceSelector,
-          )}
-        </>
-        <BluetoothDeviceSelector
-          visible={showDeviceSelector}
-          onClose={() => setShowDeviceSelector(false)}
-          devices={discoveredDevices}
-          onSelectDevice={(device) => connectToDeviceWithVehicle(device, null)}
-          isScanning={isScanning}
-          onScanAgain={startScan}
-        />
-
-        {/* Connection Status button */}
-        <TouchableOpacity
-          style={[scanDevicesStyles.debugButtonContainer, { bottom: 220 }]}
-          onPress={() => {
-            console.log(
-              "Connection Status:",
-              isConnected ? "Connected" : "Disconnected",
-            );
-            console.log("Device ID:", deviceId);
-            console.log("Device Name:", deviceName);
-
-            // Try to connect if not already connected
-            if (!isConnected && rememberedDevice) {
-              console.log("Attempting reconnection...");
-              connectToRememberedDevice();
-            }
-          }}
-        >
-          <View style={scanDevicesStyles.debugButton}>
-            <MaterialCommunityIcons name="information" size={20} color="#fff" />
-            <Text style={scanDevicesStyles.debugButtonText}>
-              Connection Status
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Test OBD Command button */}
-        <TouchableOpacity
-          style={[scanDevicesStyles.debugButton, { marginTop: 10 }]}
-          onPress={async () => {
-            if (!isConnected) {
-              Alert.alert("Not Connected", "Please connect to a device first");
-              return;
-            }
-
-            try {
-              // Show a prompt to enter an OBD command
-              Alert.prompt(
-                "Test OBD Command",
-                "Enter an OBD command (e.g., AT RV, 0100, etc.)",
-                [
-                  {
-                    text: "Cancel",
-                    style: "cancel",
-                  },
-                  {
-                    text: "Send",
-                    onPress: async (command) => {
-                      if (!command) return;
-
-                      try {
-                        const response = await sendCommand(
-                          command.trim(),
-                          "53fc0537-e506-0bcf-81ec-e757067e9ed3",
-                        );
-                        Alert.alert(
-                          "Response",
-                          `Command: ${command}\n\nResponse: ${response}`,
-                        );
-                      } catch (err) {
-                        Alert.alert(
-                          "Command Error",
-                          `Error sending command: ${
-                            err instanceof Error ? err.message : String(err)
-                          }`,
-                        );
-                      }
-                    },
-                  },
-                ],
-                "plain-text",
-                "AT RV", // Default value
-              );
-            } catch (error) {
-              console.error("Error with test command:", error);
-            }
-          }}
-        >
-          <View style={scanDevicesStyles.buttonContent}>
-            <MaterialCommunityIcons name="console" size={20} color="#fff" />
-            <Text style={scanDevicesStyles.buttonText}>Test Command</Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Add diagnostic button to your UI */}
-        <TouchableOpacity
-          style={[scanDevicesStyles.debugButtonContainer, { bottom: 630 }]}
-          onPress={async () => {
-            try {
-              if (isConnected && deviceId) {
-                Alert.alert(
-                  "Reset Connection",
-                  "This will disconnect and attempt to reconnect with proper service discovery.",
-                  [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Reset Connection",
-                      onPress: async () => {
-                        // Disconnect
-                        await disconnectDevice();
-
-                        // Wait a moment
-                        await new Promise((resolve) =>
-                          setTimeout(resolve, 1000),
-                        );
-
-                        // Reconnect with clean state
-                        if (rememberedDevice) {
-                          const success = await connectToRememberedDevice();
-                          if (success) {
-                            Alert.alert(
-                              "Reconnected",
-                              "Connection has been re-established with proper service discovery.",
-                              [{ text: "OK" }],
-                            );
-                          } else {
-                            Alert.alert(
-                              "Reconnection Failed",
-                              "Could not reconnect to the device. Try scanning again.",
-                              [{ text: "OK" }],
-                            );
-                          }
-                        }
-                      },
-                    },
-                  ],
-                );
-              } else {
-                Alert.alert(
-                  "Not Connected",
-                  "Device is not currently connected",
-                );
-              }
-            } catch (error) {
-              console.error("Error during reset:", error);
-            }
-          }}
-        >
-          <View style={scanDevicesStyles.debugButton}>
-            <MaterialCommunityIcons name="restart" size={20} color="#fff" />
-            <Text style={scanDevicesStyles.debugButtonText}>
-              Reset Connection
-            </Text>
-          </View>
-        </TouchableOpacity>
+        {/* Info Card */}
+        {!isConnected && (
+          <Card style={styles.card}>
+            <Card.Content>
+              <View style={styles.infoContainer}>
+                <MaterialCommunityIcons
+                  name="information"
+                  size={32}
+                  color={colors.info[500]}
+                />
+                <View style={styles.infoTextContainer}>
+                  <Text variant="titleMedium" style={styles.infoTitle}>
+                    Getting Started
+                  </Text>
+                  <Text variant="bodyMedium" style={styles.infoText}>
+                    1. Plug in your OBD-II scanner to your vehicle
+                  </Text>
+                  <Text variant="bodyMedium" style={styles.infoText}>
+                    2. Turn on your vehicle's ignition
+                  </Text>
+                  <Text variant="bodyMedium" style={styles.infoText}>
+                    3. Tap "Connect to Device" to start scanning
+                  </Text>
+                </View>
+              </View>
+            </Card.Content>
+          </Card>
+        )}
       </ScrollView>
+
+      {/* Device Selector Modal */}
+      <BluetoothDeviceSelector
+        visible={showDeviceSelector}
+        onClose={() => setShowDeviceSelector(false)}
+        devices={discoveredDevices}
+        onSelectDevice={handleDeviceConnection}
+        isScanning={isScanning}
+        onScanAgain={startScan}
+      />
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.gray[50],
+  },
+  header: {
+    padding: 20,
+    paddingBottom: 10,
+  },
+  headerTitle: {
+    fontWeight: "bold",
+    color: colors.gray[900],
+  },
+  headerSubtitle: {
+    color: colors.gray[600],
+    marginTop: 4,
+  },
+  vehicleChip: {
+    marginTop: 12,
+    alignSelf: "flex-start",
+    backgroundColor: colors.primary[50],
+  },
+  vehicleChipText: {
+    color: colors.primary[700],
+    fontSize: 12,
+  },
+  card: {
+    margin: 16,
+    marginTop: 8,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+  },
+  connectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  connectionIconContainer: {
+    position: "relative",
+    marginRight: 16,
+  },
+  connectedBadge: {
+    position: "absolute",
+    bottom: -4,
+    right: -4,
+    backgroundColor: colors.success[500],
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  connectionInfo: {
+    flex: 1,
+  },
+  connectionStatus: {
+    fontWeight: "600",
+    color: colors.gray[900],
+  },
+  deviceName: {
+    color: colors.gray[600],
+    marginTop: 2,
+  },
+  voltageContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  voltageText: {
+    marginLeft: 4,
+    color: colors.gray[600],
+  },
+  divider: {
+    marginVertical: 16,
+  },
+  button: {
+    marginTop: 8,
+  },
+  buttonRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  buttonFlex: {
+    flex: 1,
+  },
+  disconnectButton: {
+    minWidth: 120,
+  },
+  dtcHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  scanTime: {
+    color: colors.gray[600],
+    marginTop: 4,
+  },
+  dtcCountChip: {
+    height: 32,
+  },
+  noDtcContainer: {
+    alignItems: "center",
+    paddingVertical: 32,
+  },
+  noDtcTitle: {
+    marginTop: 16,
+    fontWeight: "600",
+    color: colors.success[700],
+  },
+  noDtcText: {
+    marginTop: 8,
+    textAlign: "center",
+    color: colors.gray[600],
+    paddingHorizontal: 16,
+  },
+  dtcCard: {
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+    backgroundColor: "#fff",
+  },
+  dtcCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  severityBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  dtcCodeContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  dtcCode: {
+    fontWeight: "bold",
+    fontFamily: "monospace",
+    color: colors.gray[900],
+  },
+  severityChip: {
+    height: 24,
+  },
+  severityChipText: {
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  dtcDescription: {
+    color: colors.gray[700],
+    lineHeight: 20,
+  },
+  clearButton: {
+    marginTop: 16,
+    borderColor: colors.error[500],
+  },
+  infoContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  infoTextContainer: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  infoTitle: {
+    fontWeight: "600",
+    color: colors.gray[900],
+    marginBottom: 8,
+  },
+  infoText: {
+    color: colors.gray[700],
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+});
 
 export default ScanDevicesScreen;

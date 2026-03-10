@@ -1,211 +1,123 @@
+/**
+ * Bluetooth Context - Simplified
+ * Provides Bluetooth connection state management across the app
+ * Uses simplified bleConnections service
+ */
+import React, { createContext, useContext, ReactNode } from "react";
 import { Alert } from "react-native";
-import React, {
-  createContext,
-  useContext,
-  ReactNode,
-  useEffect,
-  useState,
-  useCallback,
-  useRef,
-} from "react";
 import { useBleConnection } from "../services/bleConnections";
-import { AppState } from "react-native";
 import { Device } from "react-native-ble-plx";
-import { obdDataFunctions } from "../services/obdService";
+import type { BluetoothDevice } from "../services/bleConnections";
+import firebaseService from "../services/firebaseService";
+import { createOBDService } from "../services/obdService";
 
-// Define the shape of our context
+// VIN scan result type
+export interface VINScanResult {
+  vin?: string;
+  year?: string;
+  make?: string;
+  model?: string;
+  deviceId: string;
+}
+
+// Context interface
 interface BluetoothContextType {
+  // Connection state
   isScanning: boolean;
   isConnected: boolean;
   deviceId: string | null;
   deviceName: string | null;
-  discoveredDevices: any[];
-  plxDevice: Device | null; // Assuming plxDevice is a Device type, adjust as needed
-  voltage: string | null; // Assuming voltage is a number, adjust type as needed
-  rpm: number | null;
-  speed: number | null;
-  setDiscoveredDevices: (devices: any[]) => void;
-  showDeviceSelector: boolean;
-  setShowDeviceSelector: (show: boolean) => void;
+  plxDevice: Device | null;
+
+  // Discovery
+  discoveredDevices: BluetoothDevice[];
+  rememberedDevice: BluetoothDevice | null;
+
+  // Logging
+  log: string[];
+
+  // Connection methods
   startScan: () => Promise<void>;
-  connectToDevice: (device: any, vehicleId?: string) => Promise<boolean>;
-  disconnectDevice: () => Promise<void>;
+  connectToDevice: (
+    device: BluetoothDevice,
+    vehicleId?: string,
+  ) => Promise<boolean>;
+  disconnectDevice: () => Promise<boolean>;
+  connectToRememberedDevice: () => Promise<boolean>;
+  forgetRememberedDevice: () => Promise<void>;
+
+  // VIN scanning methods
+  scanDeviceForVIN: (device: BluetoothDevice) => Promise<VINScanResult | null>;
+
+  // Communication
   sendCommand: (
-    device: any,
+    device: Device,
     command: string,
     retries?: number,
-    customTimeoutMs?: number
+    timeout?: number,
   ) => Promise<string>;
-  showAllDevices: () => Promise<void>;
-  rememberedDevice: any | null;
-  verifyConnection: (deviceId: string) => Promise<boolean>;
-  connectToRememberedDevice: () => Promise<boolean>;
+
+  // Utilities
   logMessage: (message: string) => void;
-  robustReconnect: () => Promise<boolean>;
-  reconnectAttempt: number;
-  enhancedVerifyConnection: (deviceId: string) => Promise<boolean>;
-  fetchVoltage: () => Promise<string | null>;
-  fetchRPM: () => Promise<number | null>;
+  setDiscoveredDevices: React.Dispatch<React.SetStateAction<BluetoothDevice[]>>;
+
+  // Characteristic UUIDs (for advanced usage)
+  writeServiceUUID: string;
+  writeCharUUID: string;
+  readCharUUID: string;
 }
 
-// Create the context
+// Create context
 const BluetoothContext = createContext<BluetoothContextType | undefined>(
-  undefined
+  undefined,
 );
 
 // Provider component
 export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
-  // Get base BLE functionality from the hook
-  const bleConnectionHook = useBleConnection();
-
-  // State variables managed at the context level
-  const [voltage, setVoltage] = useState<string | null>(null);
-  const [rpm, setRPM] = useState<number | null>(null);
-  const [speed, setSpeed] = useState<number | null>(null);
-
-  // Maintain context-level state that persists across screens
-  const [isConnected, setIsConnected] = useState(bleConnectionHook.isConnected);
-  const [isScanning, setIsScanning] = useState(bleConnectionHook.isScanning);
-  const [lastSuccessfulCommandTime, setLastSuccessfulCommandTime] = useState(
-    bleConnectionHook.lastSuccessfulCommandTime
-  );
-  const [deviceId, setDeviceId] = useState<string | null>(
-    bleConnectionHook.deviceId
-  );
-  const [deviceName, setDeviceName] = useState<string | null>(null);
-  const [discoveredDevices, setDiscoveredDevices] = useState<any[]>(
-    bleConnectionHook.discoveredDevices
-  );
-  const [showDeviceSelector, setShowDeviceSelector] = useState(
-    bleConnectionHook.showDeviceSelector
-  );
-  const [rememberedDevice, setRememberedDevice] = useState(
-    bleConnectionHook.rememberedDevice
-  );
-  const [reconnectAttempt, setReconnectAttempt] = useState(0);
-  const logMessage = bleConnectionHook.logMessage;
-  const showAllDevices = bleConnectionHook.showAllDevices;
-  const sendCommand = bleConnectionHook.sendCommand;
-
-  // Reference to hook's log to track changes
-
-  // Sync hook state to context state
-  useEffect(() => {
-    setIsConnected(bleConnectionHook.isConnected);
-    setDeviceId(bleConnectionHook.deviceId);
-    setDiscoveredDevices(bleConnectionHook.discoveredDevices);
-    setShowDeviceSelector(bleConnectionHook.showDeviceSelector);
-    setRememberedDevice(bleConnectionHook.rememberedDevice);
-    setVoltage(bleConnectionHook.voltage); // Add this line
-  }, [
-    bleConnectionHook.isConnected,
-    bleConnectionHook.deviceId,
-    bleConnectionHook.discoveredDevices,
-    bleConnectionHook.showDeviceSelector,
-    bleConnectionHook.rememberedDevice,
-    bleConnectionHook.voltage,
-    bleConnectionHook.lastSuccessfulCommandTime,
-  ]);
-
-  // Monitor app state for background/foreground transitions - DISABLED to prevent auto-reconnects
-  // useEffect(() => {
-  //   const subscription = AppState.addEventListener("change", (nextAppState) => {
-  //     if (nextAppState === "active") {
-  //       verifyAndReconnectIfNeeded();
-  //     }
-  //   });
-
-  //   return () => subscription.remove();
-  // }, [deviceId, isConnected]);
-
-  // Verify connection periodically - DISABLED to prevent auto-reconnects
-  // useEffect(() => {
-  //   if (isConnected && deviceId) {
-  //     const interval = setInterval(async () => {
-  //       const stillConnected = await verifyConnection(deviceId);
-  //       if (!stillConnected && rememberedDevice) {
-  //         logMessage("Connection lost, attempting reconnection from context");
-  //         connectToRememberedDevice();
-  //       }
-  //     }, 30000);
-
-  //     return () => clearInterval(interval);
-  //   }
-  // }, [isConnected, deviceId, rememberedDevice]);
-
-  // Enhanced version of verifyConnection that updates context state
-  const verifyConnection = async (deviceId: string): Promise<boolean> => {
-    try {
-      const isStillConnected = await bleConnectionHook.verifyConnection(
-        deviceId
+  // Use the simplified BLE connection hook
+  const bleConnection = useBleConnection({
+    onConnectionChange: (connected, deviceId) => {
+      console.log(
+        `[Context] Connection changed: ${connected ? "Connected" : "Disconnected"} - ${deviceId}`,
       );
-      setIsConnected(isStillConnected);
-      return isStillConnected;
-    } catch (error) {
-      setIsConnected(false);
-      return false;
-    }
-  };
+    },
+    onLogMessage: (message) => {
+      // Can add additional logging handling here if needed
+    },
+  });
 
-  // Verify and reconnect if needed
-  const verifyAndReconnectIfNeeded = async () => {
-    if (isConnected && deviceId) {
-      logMessage("Verifying connection after app state change...");
-      const stillConnected = await verifyConnection(deviceId);
-
-      if (!stillConnected && rememberedDevice) {
-        logMessage("Connection lost, attempting reconnection from context");
-        try {
-          await connectToRememberedDevice();
-        } catch (error) {
-          console.error("Reconnection failed:", error);
-        }
-      }
-    }
-  };
-
-  // Enhanced connect function that updates context state
-  // Accept vehicleId for alert logic
-  const connectToDevice = async (
-    device: any,
-    vehicleId?: string
+  // Enhanced connectToDevice that saves device to vehicle
+  const connectToDeviceWithVehicle = async (
+    device: BluetoothDevice,
+    vehicleId?: string,
   ): Promise<boolean> => {
     try {
-      // Add defensive logging to debug device object
-      logMessage(`Attempting to connect to device: ${JSON.stringify(device)}`);
-      logMessage(
-        `Device ID: ${device?.id}, Device Name: ${
-          device?.name || "Unnamed Device"
-        }`
-      );
+      bleConnection.logMessage(`Connecting to ${device.name || device.id}...`);
 
-      // Validate device object
-      if (!device || !device.id) {
-        logMessage("❌ Invalid device object - missing ID");
-        return false;
-      }
-
-      logMessage(`Connecting to ${device.name || "Unnamed Device"}...`);
-      const success = await bleConnectionHook.connectToDevice(device);
+      // Connect to the device
+      const success = await bleConnection.connectToDevice(device);
 
       if (success) {
-        setIsConnected(true);
-        setDeviceId(device.id);
-        setDeviceName(device.name);
-        setRememberedDevice(device);
+        bleConnection.logMessage(
+          `✅ Successfully connected to ${device.name || device.id}`,
+        );
 
-        // 2-week mileage alert logic
+        // If vehicleId provided, save device UUID to vehicle
         if (vehicleId) {
           try {
-            const user =
-              require("../services/firebaseService").default.getCurrentUser();
+            bleConnection.logMessage(
+              `💾 Associating device with vehicle ${vehicleId}`,
+            );
+            await firebaseService.updateVehicle(vehicleId, {
+              obdUUID: device.id,
+            });
+            bleConnection.logMessage(`✅ Device associated with vehicle`);
+
+            // Check for mileage update reminder (2 weeks)
+            const user = firebaseService.getCurrentUser();
             if (user) {
-              const diag =
-                await require("../services/firebaseService").default.getVehicleById(
-                  user.uid,
-                  vehicleId
-                );
-              const lastMileageUpdate = diag?.lastMileageUpdate;
+              const vehicle = await firebaseService.getVehicleById(vehicleId);
+              const lastMileageUpdate = vehicle?.lastMileageUpdate;
               if (
                 !lastMileageUpdate ||
                 Date.now() - lastMileageUpdate > 14 * 24 * 60 * 60 * 1000
@@ -213,206 +125,147 @@ export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
                 Alert.alert(
                   "Mileage Update Needed",
                   "It's been over 2 weeks since you last updated your vehicle's mileage. Please update it now.",
-                  [{ text: "OK" }]
+                  [{ text: "OK" }],
                 );
               }
             }
-          } catch (e) {
-            let msg =
-              typeof e === "object" && e && "message" in e
-                ? (e as any).message
-                : String(e);
-            logMessage("Could not check last mileage update: " + msg);
+          } catch (error) {
+            bleConnection.logMessage(
+              `⚠️ Could not associate device with vehicle: ${error instanceof Error ? error.message : String(error)}`,
+            );
           }
         }
       }
 
       return success;
     } catch (error) {
-      logMessage(
-        `Connection error: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+      bleConnection.logMessage(
+        `❌ Connection error: ${error instanceof Error ? error.message : String(error)}`,
       );
       return false;
     }
   };
 
-  // Enhanced reconnect function that updates context state
-  const connectToRememberedDevice = async (): Promise<boolean> => {
+  // Scan device for VIN and decode vehicle information
+  const scanDeviceForVIN = async (
+    device: BluetoothDevice,
+  ): Promise<VINScanResult | null> => {
     try {
-      setReconnectAttempt((prev) => prev + 1);
-      const success = await bleConnectionHook.connectToRememberedDevice();
+      // Connect to device
+      const connected = await bleConnection.connectToDevice(device);
 
-      if (success && rememberedDevice) {
-        setIsConnected(true);
-        setDeviceId(rememberedDevice.id);
-        setDeviceName(rememberedDevice.name);
+      if (!connected || !bleConnection.plxDevice) {
+        bleConnection.logMessage("❌ Failed to connect to device for VIN scan");
+        return null;
       }
 
-      return success;
-    } catch (error) {
-      logMessage(
-        `Reconnection error: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+      // Wait for connection to stabilize
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Create OBD service and get VIN
+      const obdService = createOBDService(
+        bleConnection.plxDevice,
+        bleConnection.sendCommand,
+        bleConnection.logMessage,
       );
-      return false;
-    }
-  };
 
-  // Enhanced disconnect function
-  const disconnectDevice = async (): Promise<void> => {
-    try {
-      await bleConnectionHook.disconnectDevice();
-      setIsConnected(false);
-      setDeviceId(null);
-    } catch (error) {
-      logMessage(
-        `Disconnect error: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-  };
+      const vinFromOBD = await obdService.getVIN();
 
-  // Enhanced scan function
-  const startScan = async (): Promise<void> => {
-    try {
-      await bleConnectionHook.startScan();
-    } catch (error) {
-      logMessage(
-        `Scan error: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  };
-
-  // Enhanced reconnect function with robustness
-  const robustReconnect = async (): Promise<boolean> => {
-    try {
-      setReconnectAttempt((prev) => prev + 1);
-
-      // First try normal reconnect
-      let success = await connectToRememberedDevice();
-
-      // If failed, try additional methods
-      if (!success && rememberedDevice) {
-        // Try with enhanced verification
-        logMessage(
-          "First attempt failed, trying with enhanced verification..."
-        );
-        const enhancedVerified = await enhancedVerifyConnection(
-          rememberedDevice.id
-        );
-
-        if (enhancedVerified) {
-          setIsConnected(true);
-          setDeviceId(rememberedDevice.id);
-          return true;
-        }
+      if (!vinFromOBD) {
+        bleConnection.logMessage("⚠️ VIN not available from OBD-II device");
+        return { deviceId: device.id };
       }
 
-      return success;
-    } catch (error) {
-      logMessage(
-        `Robust reconnect error: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+      bleConnection.logMessage(`✅ VIN retrieved: ${vinFromOBD}`);
+
+      // Decode VIN using NHTSA API
+      const response = await fetch(
+        `https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${vinFromOBD}?format=json`,
       );
-      return false;
-    }
-  };
+      const data = await response.json();
 
-  // Enhanced verification with additional checks
-  const enhancedVerifyConnection = async (
-    deviceId: string
-  ): Promise<boolean> => {
-    try {
-      // First try standard verification
-      const basicVerified = await verifyConnection(deviceId);
-      if (basicVerified) return true;
+      const vehicleInfo: VINScanResult = {
+        vin: vinFromOBD,
+        deviceId: device.id,
+      };
 
-      // Additional verification logic can be added here
-      // For example, trying to read a characteristic
-      logMessage("Running enhanced verification steps...");
+      if (data.Results && data.Results.length > 0) {
+        data.Results.forEach((result: any) => {
+          switch (result.Variable) {
+            case "Model Year":
+              if (result.Value && result.Value !== "Not Applicable") {
+                vehicleInfo.year = result.Value;
+              }
+              break;
+            case "Make":
+              if (result.Value && result.Value !== "Not Applicable") {
+                vehicleInfo.make = result.Value;
+              }
+              break;
+            case "Model":
+              if (result.Value && result.Value !== "Not Applicable") {
+                vehicleInfo.model = result.Value;
+              }
+              break;
+          }
+        });
+      }
 
-      return false; // Default to false until implemented
+      bleConnection.logMessage(
+        `✅ Vehicle decoded: ${vehicleInfo.year || ""} ${vehicleInfo.make || ""} ${vehicleInfo.model || ""}`.trim(),
+      );
+
+      return vehicleInfo;
     } catch (error) {
-      return false;
+      bleConnection.logMessage(
+        `❌ VIN scan error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
     }
   };
 
-  // Create wrapper functions that update state after calling service functions
-  const fetchVoltage = async (): Promise<string | null> => {
-    const voltageValue = await obdDataFunctions.fetchVoltage(
-      bleConnectionHook.plxDevice,
-      bleConnectionHook.sendCommand,
-      bleConnectionHook.logMessage
-    );
+  // Create context value with all BLE connection properties and methods
+  const contextValue: BluetoothContextType = {
+    // State
+    isScanning: bleConnection.isScanning,
+    isConnected: bleConnection.isConnected,
+    deviceId: bleConnection.deviceId,
+    deviceName: bleConnection.deviceName,
+    plxDevice: bleConnection.plxDevice,
+    discoveredDevices: bleConnection.discoveredDevices,
+    rememberedDevice: bleConnection.rememberedDevice,
+    log: bleConnection.log,
 
-    if (voltageValue) {
-      setVoltage(voltageValue);
-    }
+    // Characteristic UUIDs
+    writeServiceUUID: bleConnection.writeServiceUUID,
+    writeCharUUID: bleConnection.writeCharUUID,
+    readCharUUID: bleConnection.readCharUUID,
 
-    return voltageValue;
-  };
+    // Methods
+    startScan: bleConnection.startScan,
+    connectToDevice: connectToDeviceWithVehicle,
+    disconnectDevice: bleConnection.disconnectDevice,
+    connectToRememberedDevice: bleConnection.connectToRememberedDevice,
+    forgetRememberedDevice: bleConnection.forgetRememberedDevice,
+    sendCommand: bleConnection.sendCommand,
+    logMessage: bleConnection.logMessage,
+    setDiscoveredDevices: bleConnection.setDiscoveredDevices,
 
-  const fetchRPM = async (): Promise<number | null> => {
-    const rpmValue = await obdDataFunctions.fetchRPM(
-      bleConnectionHook.plxDevice,
-      bleConnectionHook.sendCommand,
-      bleConnectionHook.logMessage
-    );
-
-    if (rpmValue !== null) {
-      setRPM(rpmValue);
-    }
-
-    return rpmValue;
-  };
-
-  // Add to context value
-  const contextValue = {
-    // Context-managed state
-    voltage,
-    rpm,
-    speed,
-    isScanning,
-    isConnected,
-    deviceId,
-    deviceName,
-    discoveredDevices,
-    showDeviceSelector,
-    rememberedDevice,
-    reconnectAttempt,
-    lastSuccessfulCommandTime,
-    plxDevice: bleConnectionHook.plxDevice, // Assuming plxDevice is part of the hook
-
-    // Enhanced functions with context state management
-    setDiscoveredDevices,
-    sendCommand,
-    setShowDeviceSelector,
-    showAllDevices,
-    startScan,
-    connectToDevice,
-    disconnectDevice: disconnectDevice,
-    connectToRememberedDevice,
-    verifyConnection,
-    logMessage,
-    robustReconnect,
-    enhancedVerifyConnection,
-    // Pass through other hook functions
-    fetchVoltage,
-    fetchRPM,
+    // VIN scanning
+    scanDeviceForVIN,
   };
 
   return (
-    <BluetoothContext.Provider value={contextValue as BluetoothContextType}>
+    <BluetoothContext.Provider value={contextValue}>
       {children}
     </BluetoothContext.Provider>
   );
 };
 
+/**
+ * Hook to access Bluetooth context
+ * Must be used within BluetoothProvider
+ */
 export const useBluetooth = () => {
   const context = useContext(BluetoothContext);
 

@@ -22,10 +22,13 @@ interface BluetoothDeviceSelectorProps {
   visible: boolean;
   onClose: () => void;
   devices: BluetoothDevice[];
-  onSelectDevice: (device: BluetoothDevice) => void;
+  onSelectDevice: (device: BluetoothDevice) => Promise<boolean>;
   isScanning: boolean;
   onScanAgain: () => void;
-  onUpdateDevices?: (devices: BluetoothDevice[]) => void; // Add this prop
+  onUpdateDevices?: (devices: BluetoothDevice[]) => void;
+  connectedDeviceId?: string | null;
+  connectedDeviceName?: string | null;
+  onDisconnect?: () => Promise<void>;
 }
 
 const BluetoothDeviceSelector: React.FC<BluetoothDeviceSelectorProps> = ({
@@ -36,14 +39,31 @@ const BluetoothDeviceSelector: React.FC<BluetoothDeviceSelectorProps> = ({
   isScanning,
   onScanAgain,
   onUpdateDevices,
+  connectedDeviceId,
+  connectedDeviceName,
+  onDisconnect,
 }) => {
-  // Add state for showing all devices
-  const [showAllDevices, setShowAllDevices] = useState(false);
+  const [connectingDeviceId, setConnectingDeviceId] = useState<string | null>(
+    null,
+  );
 
-  // Example of how the BluetoothDeviceSelector component should handle device selection
-  const handleDeviceSelect = (device: BluetoothDevice) => {
-    // logMessage(`Selected device: ${device.name || "Unnamed"} (${device.id})`);
-    onSelectDevice(device); // This calls connectToDevice with the device object
+  // Handle device selection with connecting feedback
+  const handleDeviceSelect = async (device: BluetoothDevice) => {
+    setConnectingDeviceId(device.id);
+    try {
+      const success = await onSelectDevice(device);
+      if (success) {
+        // Close modal on successful connection
+        setTimeout(() => {
+          setConnectingDeviceId(null);
+          onClose();
+        }, 500);
+      } else {
+        setConnectingDeviceId(null);
+      }
+    } catch (error) {
+      setConnectingDeviceId(null);
+    }
   };
 
   return (
@@ -56,109 +76,141 @@ const BluetoothDeviceSelector: React.FC<BluetoothDeviceSelectorProps> = ({
       <View style={styles.centeredView}>
         <View style={styles.modalView}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select a device</Text>
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.filterToggle}
-                onPress={() => setShowAllDevices(!showAllDevices)}
-              >
-                <Text style={styles.filterText}>
-                  {showAllDevices ? "Show Named Only" : "Show All"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={onClose}>
-                <MaterialCommunityIcons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.modalTitle}>Select OBDII Device</Text>
+            <TouchableOpacity onPress={onClose}>
+              <MaterialCommunityIcons name="close" size={24} color="#333" />
+            </TouchableOpacity>
           </View>
 
-          {isScanning ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary[500]} />
+          {connectedDeviceId && (
+            <View style={styles.connectedBanner}>
+              <View style={styles.connectedInfo}>
+                <MaterialCommunityIcons
+                  name="bluetooth-connect"
+                  size={20}
+                  color={colors.success[500]}
+                />
+                <Text style={styles.connectedText}>
+                  Connected: {connectedDeviceName || "Device"}
+                </Text>
+              </View>
+              {onDisconnect && (
+                <TouchableOpacity
+                  style={styles.disconnectButton}
+                  onPress={onDisconnect}
+                >
+                  <Text style={styles.disconnectButtonText}>Disconnect</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {isScanning && (
+            <View style={styles.scanningBanner}>
+              <ActivityIndicator size="small" color={colors.primary[500]} />
               <Text style={styles.scanningText}>Scanning for devices...</Text>
             </View>
-          ) : (
-            <>
-              {devices.length > 0 ? (
-                <FlatList
-                  data={devices.filter((device) =>
-                    showAllDevices ? true : device.name,
-                  )}
-                  keyExtractor={(item) => item.id}
-                  style={styles.deviceList}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={styles.deviceItem}
-                      onPress={() => handleDeviceSelect(item)}
-                    >
-                      <View style={styles.deviceInfo}>
-                        <MaterialCommunityIcons
-                          name="bluetooth"
-                          size={24}
-                          color={colors.primary[500]}
-                        />
-                        <View style={styles.deviceTextContainer}>
-                          <Text style={styles.deviceName}>
-                            {item.name || "Unnamed Device"}
+          )}
+
+          {devices.length > 0 ? (
+            <FlatList
+              data={devices}
+              keyExtractor={(item) => item.id}
+              style={styles.deviceList}
+              renderItem={({ item }) => {
+                const isConnecting = connectingDeviceId === item.id;
+                const isConnected = connectedDeviceId === item.id;
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.deviceItem,
+                      isConnecting && styles.deviceItemConnecting,
+                      isConnected && styles.deviceItemConnected,
+                    ]}
+                    onPress={() => handleDeviceSelect(item)}
+                    disabled={isConnecting || isConnected}
+                  >
+                    <View style={styles.deviceInfo}>
+                      <MaterialCommunityIcons
+                        name="bluetooth"
+                        size={24}
+                        color={
+                          isConnecting
+                            ? colors.primary[300]
+                            : colors.primary[500]
+                        }
+                      />
+                      <View style={styles.deviceTextContainer}>
+                        <Text style={styles.deviceName}>
+                          {item.name || "Unnamed Device"}
+                        </Text>
+                        <Text style={styles.deviceId}>
+                          {item.id.substring(0, 8)}...
+                        </Text>
+                        <View style={styles.signalContainer}>
+                          <Text style={styles.deviceMeta}>Signal:</Text>
+                          {/* Signal strength indicator */}
+                          {[1, 2, 3, 4].map((bar) => (
+                            <View
+                              key={bar}
+                              style={[
+                                styles.signalBar,
+                                {
+                                  height: 3 + bar * 3,
+                                  opacity:
+                                    item.rssi > -100 + bar * 15 ? 1 : 0.2,
+                                },
+                              ]}
+                            />
+                          ))}
+                          <Text style={styles.deviceMeta}>
+                            {" "}
+                            {item.rssi} dBm
                           </Text>
-                          <Text style={styles.deviceId}>
-                            {item.id.substring(0, 8)}...
-                          </Text>
-                          <View style={styles.signalContainer}>
-                            <Text style={styles.deviceMeta}>Signal:</Text>
-                            {/* Signal strength indicator */}
-                            {[1, 2, 3, 4].map((bar) => (
-                              <View
-                                key={bar}
-                                style={[
-                                  styles.signalBar,
-                                  {
-                                    height: 3 + bar * 3,
-                                    opacity:
-                                      item.rssi > -100 + bar * 15 ? 1 : 0.2,
-                                  },
-                                ]}
-                              />
-                            ))}
-                            <Text style={styles.deviceMeta}>
-                              {" "}
-                              {item.rssi} dBm
-                            </Text>
-                          </View>
                         </View>
                       </View>
+                    </View>
+                    {isConnecting ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={colors.primary[500]}
+                      />
+                    ) : (
                       <MaterialCommunityIcons
                         name="chevron-right"
                         size={24}
                         color="#888"
                       />
-                    </TouchableOpacity>
-                  )}
-                />
-              ) : (
-                <View style={styles.emptyState}>
-                  <MaterialCommunityIcons
-                    name="bluetooth-off"
-                    size={48}
-                    color="#888"
-                  />
-                  <Text style={styles.emptyText}>No devices found</Text>
-                  <Text style={styles.emptySubText}>
-                    Make sure your Bluetooth device is powered on and in range
-                  </Text>
-                </View>
-              )}
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          ) : !isScanning ? (
+            <View style={styles.emptyState}>
+              <MaterialCommunityIcons
+                name="bluetooth-off"
+                size={48}
+                color="#888"
+              />
+              <Text style={styles.emptyText}>No OBDII devices found</Text>
+              <Text style={styles.emptySubText}>
+                Make sure your OBDII scanner is plugged into your vehicle,
+                powered on, and in range
+              </Text>
+            </View>
+          ) : null}
 
-              <TouchableOpacity style={styles.scanButton} onPress={onScanAgain}>
-                <MaterialCommunityIcons
-                  name="bluetooth"
-                  size={20}
-                  color="#fff"
-                />
-                <Text style={styles.scanButtonText}>Scan Again</Text>
-              </TouchableOpacity>
-            </>
-          )}
+          <TouchableOpacity
+            style={styles.scanButton}
+            onPress={onScanAgain}
+            disabled={isScanning}
+          >
+            <MaterialCommunityIcons name="bluetooth" size={20} color="#fff" />
+            <Text style={styles.scanButtonText}>
+              {isScanning ? "Scanning..." : "Scan Again"}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -194,10 +246,6 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
   },
   modalTitle: {
     fontSize: 18,
@@ -270,9 +318,20 @@ const styles = StyleSheet.create({
     padding: 40,
     alignItems: "center",
   },
+  scanningBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 12,
+    backgroundColor: colors.primary[50],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.primary[100],
+    gap: 8,
+  },
   scanningText: {
-    marginTop: 16,
-    fontSize: 16,
+    fontSize: 14,
+    color: colors.primary[700],
+    fontWeight: "500",
   },
   signalContainer: {
     flexDirection: "row",
@@ -285,15 +344,44 @@ const styles = StyleSheet.create({
     marginRight: 2,
     borderRadius: 1,
   },
-  filterToggle: {
-    padding: 8,
-    borderRadius: 16,
-    backgroundColor: "#f0f0f0",
-    marginRight: 8,
+  deviceItemConnecting: {
+    backgroundColor: "#f0f9ff",
+    opacity: 0.8,
   },
-  filterText: {
+  deviceItemConnected: {
+    backgroundColor: colors.success[50],
+    borderLeftWidth: 4,
+    borderLeftColor: colors.success[500],
+  },
+  connectedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 12,
+    backgroundColor: colors.success[50],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.success[100],
+  },
+  connectedInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  connectedText: {
     fontSize: 14,
-    color: "#333",
+    color: colors.success[700],
+    fontWeight: "500",
+  },
+  disconnectButton: {
+    backgroundColor: colors.error[500],
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  disconnectButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
   },
 });
 

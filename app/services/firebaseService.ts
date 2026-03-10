@@ -348,7 +348,7 @@ export const readData = async (userId: string) => {
 // Creates a user profile in the database if it doesn't already exist
 export const ensureUserProfile = async (
   user: FirebaseAuthTypes.User,
-  role: "user" | "mechanic" = "user",
+  role: "user" | "mechanic" | "admin" = "user",
 ) => {
   if (!user) return null;
 
@@ -545,12 +545,14 @@ export const confirmPhoneCode = async (
 };
 
 // Google Authentication
-export const signInWithGoogle = async (role?: "user" | "mechanic") => {
+export const signInWithGoogle = async (role?: "user" | "mechanic" | "admin") => {
   try {
     // Configure Google Sign-In
     GoogleSignin.configure({
       webClientId:
         "578434461817-994bl7g0rqsqljs8e29cncfulv70ej6c.apps.googleusercontent.com",
+      iosClientId:
+        "578434461817-md1gkd20l3ue846hossn1v1g2ip189uk.apps.googleusercontent.com",
     });
 
     // Check if device has Google Play Services

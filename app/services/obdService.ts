@@ -1,30 +1,701 @@
 /**
- * OBD-II Service
- * Comprehensive OBD-II communication and PID command handling
- * Includes enhanced voltage fetching with wake-up sequences and error handling
+ * OBD-II Service - Simplified and Professional
+ * Focused on diagnostic trouble codes and essential vehicle data
  */
-
 import { Device } from "react-native-ble-plx";
 
+// Types
+export interface DiagnosticTroubleCode {
+  code: string;
+  description: string;
+  severity: "critical" | "warning" | "info";
+}
+
+export interface VehicleData {
+  voltage: string | null;
+  rpm: number | null;
+  speed: number | null;
+  coolantTemp: number | null;
+}
+
+// DTC Code Descriptions Database
+const DTC_DESCRIPTIONS: Record<
+  string,
+  { description: string; severity: "critical" | "warning" | "info" }
+> = {
+  P0001: {
+    description: "Fuel Volume Regulator Control Circuit/Open",
+    severity: "warning",
+  },
+  P0100: {
+    description: "Mass or Volume Air Flow Circuit Malfunction",
+    severity: "warning",
+  },
+  P0101: {
+    description: "Mass or Volume Air Flow Circuit Range/Performance Problem",
+    severity: "warning",
+  },
+  P0102: {
+    description: "Mass or Volume Air Flow Circuit Low Input",
+    severity: "warning",
+  },
+  P0103: {
+    description: "Mass or Volume Air Flow Circuit High Input",
+    severity: "warning",
+  },
+  P0110: {
+    description: "Intake Air Temperature Circuit Malfunction",
+    severity: "warning",
+  },
+  P0115: {
+    description: "Engine Coolant Temperature Circuit Malfunction",
+    severity: "critical",
+  },
+  P0116: {
+    description: "Engine Coolant Temperature Circuit Range/Performance Problem",
+    severity: "warning",
+  },
+  P0117: {
+    description: "Engine Coolant Temperature Circuit Low Input",
+    severity: "critical",
+  },
+  P0118: {
+    description: "Engine Coolant Temperature Circuit High Input",
+    severity: "critical",
+  },
+  P0120: {
+    description: "Throttle Position Sensor/Switch A Circuit Malfunction",
+    severity: "warning",
+  },
+  P0121: {
+    description:
+      "Throttle Position Sensor/Switch A Circuit Range/Performance Problem",
+    severity: "warning",
+  },
+  P0130: {
+    description: "O2 Sensor Circuit Malfunction (Bank 1, Sensor 1)",
+    severity: "warning",
+  },
+  P0131: {
+    description: "O2 Sensor Circuit Low Voltage (Bank 1, Sensor 1)",
+    severity: "warning",
+  },
+  P0132: {
+    description: "O2 Sensor Circuit High Voltage (Bank 1, Sensor 1)",
+    severity: "warning",
+  },
+  P0133: {
+    description: "O2 Sensor Circuit Slow Response (Bank 1, Sensor 1)",
+    severity: "warning",
+  },
+  P0134: {
+    description: "O2 Sensor Circuit No Activity Detected (Bank 1, Sensor 1)",
+    severity: "warning",
+  },
+  P0171: { description: "System Too Lean (Bank 1)", severity: "critical" },
+  P0172: { description: "System Too Rich (Bank 1)", severity: "critical" },
+  P0174: { description: "System Too Lean (Bank 2)", severity: "critical" },
+  P0175: { description: "System Too Rich (Bank 2)", severity: "critical" },
+  P0200: { description: "Injector Circuit Malfunction", severity: "critical" },
+  P0300: {
+    description: "Random/Multiple Cylinder Misfire Detected",
+    severity: "critical",
+  },
+  P0301: { description: "Cylinder 1 Misfire Detected", severity: "critical" },
+  P0302: { description: "Cylinder 2 Misfire Detected", severity: "critical" },
+  P0303: { description: "Cylinder 3 Misfire Detected", severity: "critical" },
+  P0304: { description: "Cylinder 4 Misfire Detected", severity: "critical" },
+  P0305: { description: "Cylinder 5 Misfire Detected", severity: "critical" },
+  P0306: { description: "Cylinder 6 Misfire Detected", severity: "critical" },
+  P0420: {
+    description: "Catalyst System Efficiency Below Threshold (Bank 1)",
+    severity: "warning",
+  },
+  P0430: {
+    description: "Catalyst System Efficiency Below Threshold (Bank 2)",
+    severity: "warning",
+  },
+  P0440: {
+    description: "Evaporative Emission Control System Malfunction",
+    severity: "warning",
+  },
+  P0442: {
+    description:
+      "Evaporative Emission Control System Leak Detected (small leak)",
+    severity: "info",
+  },
+  P0443: {
+    description:
+      "Evaporative Emission Control System Purge Control Valve Circuit Malfunction",
+    severity: "warning",
+  },
+  P0500: {
+    description: "Vehicle Speed Sensor Malfunction",
+    severity: "warning",
+  },
+  P0505: {
+    description: "Idle Control System Malfunction",
+    severity: "warning",
+  },
+  P0601: {
+    description: "Internal Control Module Memory Check Sum Error",
+    severity: "critical",
+  },
+  P0700: {
+    description: "Transmission Control System Malfunction",
+    severity: "critical",
+  },
+  P0750: { description: "Shift Solenoid A Malfunction", severity: "critical" },
+};
+
+/**
+ * OBD-II Service Class
+ * Provides clean API for OBD-II operations
+ */
+export class OBDIIService {
+  private device: Device;
+  private sendCommand: (
+    device: Device,
+    command: string,
+    retries?: number,
+    timeout?: number,
+  ) => Promise<string>;
+  private logMessage: (message: string) => void;
+
+  constructor(
+    device: Device,
+    sendCommand: (
+      device: Device,
+      command: string,
+      retries?: number,
+      timeout?: number,
+    ) => Promise<string>,
+    logMessage: (message: string) => void,
+  ) {
+    this.device = device;
+    this.sendCommand = sendCommand;
+    this.logMessage = logMessage;
+  }
+
+  /**
+   * Get Diagnostic Trouble Codes
+   * Returns array of DTCs with descriptions and severity
+   */
+  async getDTCs(): Promise<DiagnosticTroubleCode[]> {
+    this.logMessage("📋 Fetching diagnostic trouble codes...");
+
+    try {
+      // Request stored DTCs (Mode 03)
+      const response = await this.sendCommand(this.device, "03", 3, 8000);
+
+      if (!response) {
+        this.logMessage("❌ No response received for DTC request");
+        return [];
+      }
+
+      this.logMessage(`📨 Raw DTC Response: ${response}`);
+
+      // Check for "NO DATA" response
+      if (response.includes("NO DATA")) {
+        this.logMessage("✅ No diagnostic trouble codes found");
+        return [];
+      }
+
+      // Parse DTC codes from response
+      const dtcCodes = this.parseDTCResponse(response);
+
+      if (dtcCodes.length === 0) {
+        this.logMessage("✅ No diagnostic trouble codes found");
+        return [];
+      }
+
+      // Enhance DTCs with descriptions and severity
+      const enhancedDTCs = dtcCodes.map((code) => this.enhanceDTC(code));
+
+      this.logMessage(
+        `✅ Found ${enhancedDTCs.length} diagnostic trouble code(s)`,
+      );
+      return enhancedDTCs;
+    } catch (error) {
+      this.logMessage(
+        `❌ Error fetching DTCs: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Clear all Diagnostic Trouble Codes
+   */
+  async clearDTCs(): Promise<boolean> {
+    this.logMessage("🗑️ Clearing diagnostic trouble codes...");
+
+    try {
+      // Send clear DTCs command (Mode 04)
+      const response = await this.sendCommand(this.device, "04", 2, 5000);
+
+      if (response.includes("44") || response.includes("OK")) {
+        this.logMessage("✅ Diagnostic trouble codes cleared successfully");
+        return true;
+      }
+
+      this.logMessage("⚠️ Unclear response when clearing DTCs");
+      return false;
+    } catch (error) {
+      this.logMessage(
+        `❌ Error clearing DTCs: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Get battery voltage
+   */
+  async getVoltage(): Promise<string | null> {
+    this.logMessage("🔋 Fetching battery voltage...");
+
+    try {
+      const response = await this.sendCommand(this.device, "AT RV", 3, 5000);
+
+      if (response) {
+        const voltageMatch = response.match(/(\d+\.?\d*)\s*V/i);
+        if (voltageMatch) {
+          const voltage = voltageMatch[1];
+          this.logMessage(`✅ Battery voltage: ${voltage}V`);
+          return voltage;
+        }
+      }
+
+      this.logMessage("❌ Could not parse voltage from response");
+      return null;
+    } catch (error) {
+      this.logMessage(
+        `❌ Error fetching voltage: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Get Vehicle Identification Number (VIN)
+   * Uses Mode 09, PID 02
+   */
+  async getVIN(): Promise<string | null> {
+    this.logMessage("🔍 Fetching Vehicle Identification Number (VIN)...");
+
+    try {
+      // Request VIN (Mode 09, PID 02)
+      const response = await this.sendCommand(this.device, "0902", 3, 10000);
+
+      if (!response) {
+        this.logMessage("❌ No response received for VIN request");
+        return null;
+      }
+
+      this.logMessage(`📨 Raw VIN Response: ${response}`);
+
+      // Check for "NO DATA" or error response
+      if (
+        response.includes("NO DATA") ||
+        response.includes("NODATA") ||
+        response.includes("UNABLE")
+      ) {
+        this.logMessage(
+          "❌ VIN not available from this vehicle (OBD-II does not support Mode 09 PID 02)",
+        );
+        return null;
+      }
+
+      // Check if response is just the command echo with no data
+      const cleanedForCheck = response.replace(/[\r\n\s>]/g, "").toUpperCase();
+      if (cleanedForCheck === "0902" || cleanedForCheck.length < 10) {
+        this.logMessage("❌ Vehicle did not respond with VIN data");
+        return null;
+      }
+
+      // Parse VIN from response
+      const vin = this.parseVINResponse(response);
+
+      if (!vin || vin.length !== 17) {
+        this.logMessage(
+          `⚠️ Invalid VIN length: ${vin?.length || 0} (expected 17)`,
+        );
+        return null;
+      }
+
+      this.logMessage(`✅ VIN Retrieved: ${vin}`);
+      return vin;
+    } catch (error) {
+      this.logMessage(
+        `❌ Error fetching VIN: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Get basic vehicle data (voltage, RPM, speed, coolant temp)
+   */
+  async getBasicVehicleData(): Promise<VehicleData> {
+    this.logMessage("📊 Fetching basic vehicle data...");
+
+    const data: VehicleData = {
+      voltage: null,
+      rpm: null,
+      speed: null,
+      coolantTemp: null,
+    };
+
+    try {
+      // Get voltage
+      data.voltage = await this.getVoltage();
+
+      // Get RPM (PID 0C)
+      try {
+        const rpmResponse = await this.sendCommand(
+          this.device,
+          "010C",
+          2,
+          5000,
+        );
+        data.rpm = this.parseRPM(rpmResponse);
+      } catch (error) {
+        this.logMessage(`⚠️ Could not fetch RPM: ${error}`);
+      }
+
+      // Get speed (PID 0D)
+      try {
+        const speedResponse = await this.sendCommand(
+          this.device,
+          "010D",
+          2,
+          5000,
+        );
+        data.speed = this.parseSpeed(speedResponse);
+      } catch (error) {
+        this.logMessage(`⚠️ Could not fetch speed: ${error}`);
+      }
+
+      // Get coolant temp (PID 05)
+      try {
+        const tempResponse = await this.sendCommand(
+          this.device,
+          "0105",
+          2,
+          5000,
+        );
+        data.coolantTemp = this.parseCoolantTemp(tempResponse);
+      } catch (error) {
+        this.logMessage(`⚠️ Could not fetch coolant temperature: ${error}`);
+      }
+
+      this.logMessage("✅ Basic vehicle data retrieved");
+      return data;
+    } catch (error) {
+      this.logMessage(
+        `❌ Error fetching vehicle data: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return data;
+    }
+  }
+
+  // Private helper methods
+
+  private parseVINResponse(response: string): string | null {
+    try {
+      // Clean response - remove whitespace, carriage returns, and common noise
+      let cleanResponse = response
+        .replace(/\r/g, "")
+        .replace(/\n/g, " ")
+        .toUpperCase();
+
+      this.logMessage(`🔍 Initial Response: ${cleanResponse}`);
+
+      // Remove common OBD-II noise patterns
+      cleanResponse = cleanResponse
+        .replace(/BUS INIT[:\s]*\.+OK/gi, "") // Remove BUS INIT: ...OK
+        .replace(/SEARCHING\.+/gi, "") // Remove SEARCHING...
+        .replace(/0902/g, "") // Remove command echo
+        .replace(/09\s*02/g, "") // Remove spaced command echo
+        .replace(/>/g, "") // Remove prompt characters
+        .replace(/\d:/g, "") // Remove frame indicators (0:, 1:, 2:, etc)
+        .replace(/\s+/g, "") // Remove all remaining whitespace
+        .trim();
+
+      this.logMessage(`🔍 Cleaned VIN Response: ${cleanResponse}`);
+
+      // Look for Mode 09 response pattern: 49 02 01 [VIN bytes]
+      // Multi-frame format: 49 02 01 + 17 bytes of VIN in hex
+      const vinPattern = /490201([\dA-F]+)/i;
+      const match = cleanResponse.match(vinPattern);
+
+      if (!match) {
+        this.logMessage("❌ Could not find VIN pattern in response");
+        this.logMessage(
+          "💡 Tip: The OBD device may not support VIN retrieval, or initialization failed",
+        );
+        return null;
+      }
+
+      // Extract hex data after the header (49 02 01)
+      let hexData = match[1];
+
+      this.logMessage(`🔍 Extracted hex data: ${hexData}`);
+
+      // Convert hex pairs to ASCII characters
+      let vin = "";
+      for (let i = 0; i < hexData.length && i < 34; i += 2) {
+        // 34 hex chars = 17 bytes
+        const hexPair = hexData.substr(i, 2);
+        const charCode = parseInt(hexPair, 16);
+
+        // Only include valid VIN characters (A-Z, 0-9)
+        // VINs don't contain I, O, Q to avoid confusion with 1, 0
+        if (
+          (charCode >= 48 && charCode <= 57) || // 0-9
+          (charCode >= 65 && charCode <= 72) || // A-H
+          (charCode >= 74 && charCode <= 78) || // J-N
+          (charCode >= 80 && charCode <= 90) // P-Z (excluding O, Q)
+        ) {
+          vin += String.fromCharCode(charCode);
+        }
+      }
+
+      this.logMessage(`🔍 Parsed VIN: ${vin}`);
+
+      // VIN should be exactly 17 characters
+      if (vin.length >= 17) {
+        return vin.substring(0, 17);
+      } else if (vin.length > 0) {
+        this.logMessage(`⚠️ VIN too short (${vin.length} chars): ${vin}`);
+        return vin.length >= 11 ? vin : null; // Return if at least 11 chars (partial VIN)
+      }
+
+      return null;
+    } catch (error) {
+      this.logMessage(`❌ Error parsing VIN: ${error}`);
+      return null;
+    }
+  }
+
+  private parseDTCResponse(response: string): string[] {
+    const dtcCodes: string[] = [];
+
+    // Clean response
+    const cleanResponse = response
+      .replace(/\r/g, "\n")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    // Look for 43 XX XX pattern (Mode 03 response)
+    const hexPattern = /43\s*([0-9A-F\s]+)/gi;
+    const matches = cleanResponse.matchAll(hexPattern);
+
+    for (const match of matches) {
+      const hexData = match[1].replace(/\s/g, "");
+
+      // Parse DTC bytes (each DTC is 2 bytes)
+      for (let i = 0; i < hexData.length; i += 4) {
+        const dtcBytes = hexData.substr(i, 4);
+        if (dtcBytes.length === 4 && dtcBytes !== "0000") {
+          const dtcCode = this.hexToDTC(dtcBytes);
+          if (dtcCode) {
+            dtcCodes.push(dtcCode);
+          }
+        }
+      }
+    }
+
+    return dtcCodes;
+  }
+
+  private hexToDTC(hex: string): string | null {
+    if (hex.length !== 4) return null;
+
+    const byte1 = parseInt(hex.substring(0, 2), 16);
+    const byte2 = parseInt(hex.substring(2, 4), 16);
+
+    // Determine DTC prefix based on first 2 bits of first byte
+    const prefixBits = (byte1 >> 6) & 0x03;
+    const prefixMap: Record<number, string> = {
+      0: "P", // Powertrain
+      1: "C", // Chassis
+      2: "B", // Body
+      3: "U", // Network
+    };
+    const prefix = prefixMap[prefixBits] || "P";
+
+    // Extract the rest of the code
+    const digit2Bits = (byte1 >> 4) & 0x03;
+    const digit3 = (byte1 & 0x0f).toString(16).toUpperCase();
+    const digit4and5 = byte2.toString(16).toUpperCase().padStart(2, "0");
+
+    return `${prefix}${digit2Bits}${digit3}${digit4and5}`;
+  }
+
+  private enhanceDTC(code: string): DiagnosticTroubleCode {
+    const dtcInfo = DTC_DESCRIPTIONS[code];
+
+    if (dtcInfo) {
+      return {
+        code,
+        description: dtcInfo.description,
+        severity: dtcInfo.severity,
+      };
+    }
+
+    // Default for unknown codes
+    return {
+      code,
+      description: "Unknown diagnostic trouble code",
+      severity: "info",
+    };
+  }
+
+  private parseRPM(response: string): number | null {
+    const responseStr = String(response).replace(/\r/g, "\n");
+    const lines = responseStr
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const hexLine = lines.reverse().find((line) => /41\s*0C/i.test(line));
+
+    if (!hexLine) return null;
+
+    const hexMatch = hexLine.match(
+      /41\s*0C\s*([0-9A-Fa-f]{2})\s*([0-9A-Fa-f]{2})/,
+    );
+    if (!hexMatch) return null;
+
+    const A = parseInt(hexMatch[1], 16);
+    const B = parseInt(hexMatch[2], 16);
+    if (isNaN(A) || isNaN(B)) return null;
+
+    return (A * 256 + B) / 4;
+  }
+
+  private parseSpeed(response: string): number | null {
+    const responseStr = String(response).replace(/\r/g, "\n");
+    const lines = responseStr
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const hexLine = lines.reverse().find((line) => /41\s*0D/i.test(line));
+
+    if (!hexLine) return null;
+
+    const hexMatch = hexLine.match(/41\s*0D\s*([0-9A-Fa-f]{2})/);
+    if (!hexMatch) return null;
+
+    const A = parseInt(hexMatch[1], 16);
+    if (isNaN(A)) return null;
+
+    return A; // km/h
+  }
+
+  private parseCoolantTemp(response: string): number | null {
+    const responseStr = String(response).replace(/\r/g, "\n");
+    const lines = responseStr
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const hexLine = lines.reverse().find((line) => /41\s*05/i.test(line));
+
+    if (!hexLine) return null;
+
+    const hexMatch = hexLine.match(/41\s*05\s*([0-9A-Fa-f]{2})/);
+    if (!hexMatch) return null;
+
+    const A = parseInt(hexMatch[1], 16);
+    if (isNaN(A)) return null;
+
+    return A - 40; // Celsius
+  }
+}
+
+/**
+ * Factory function to create OBD-II Service instance
+ */
+export function createOBDService(
+  device: Device,
+  sendCommand: (
+    device: Device,
+    command: string,
+    retries?: number,
+    timeout?: number,
+  ) => Promise<string>,
+  logMessage: (message: string) => void,
+): OBDIIService {
+  return new OBDIIService(device, sendCommand, logMessage);
+}
+
+/**
+ * Backward Compatibility Layer
+ * For screens still using the old obdDataFunctions API
+ * @deprecated Use createOBDService() instead
+ */
 export interface TemperatureData {
   celsius: number;
   fahrenheit: number;
 }
 
-export interface OBDCommandResult {
-  success: boolean;
-  data?: any;
-  error?: string;
-}
-
-/**
- * OBD-II Data Collection Service
- * Pure functions that don't depend on context - accept dependencies as parameters
- */
 export const obdDataFunctions = {
   /**
-   * Fetch battery voltage from OBD-II device
-   * Enhanced with wake-up sequences, health checks, and better error handling
+   * @deprecated Use OBDIIService.getDTCs() instead
+   */
+  getDTCCodes: async (
+    plxDevice: Device | null,
+    sendCommand: (
+      device: Device,
+      command: string,
+      retries?: number,
+      timeout?: number,
+    ) => Promise<string>,
+    logMessage: (message: string) => void,
+  ): Promise<string[]> => {
+    if (!plxDevice) {
+      logMessage("❌ No device connected");
+      return [];
+    }
+    try {
+      const service = createOBDService(plxDevice, sendCommand, logMessage);
+      const dtcs = await service.getDTCs();
+      return dtcs.map((dtc) => dtc.code);
+    } catch (error) {
+      logMessage(`❌ Error getting DTCs: ${error}`);
+      return [];
+    }
+  },
+
+  /**
+   * @deprecated Use OBDIIService.clearDTCs() instead
+   */
+  clearDTCCodes: async (
+    plxDevice: Device | null,
+    sendCommand: (
+      device: Device,
+      command: string,
+      retries?: number,
+      timeout?: number,
+    ) => Promise<string>,
+    logMessage: (message: string) => void,
+  ): Promise<boolean> => {
+    if (!plxDevice) {
+      logMessage("❌ No device connected");
+      return false;
+    }
+    try {
+      const service = createOBDService(plxDevice, sendCommand, logMessage);
+      return await service.clearDTCs();
+    } catch (error) {
+      logMessage(`❌ Error clearing DTCs: ${error}`);
+      return false;
+    }
+  },
+
+  /**
+   * @deprecated Use OBDIIService.getVoltage() instead
    */
   fetchVoltage: async (
     plxDevice: Device | null,
@@ -32,149 +703,25 @@ export const obdDataFunctions = {
       device: Device,
       command: string,
       retries?: number,
-      customTimeoutMs?: number
+      timeout?: number,
     ) => Promise<string>,
-    logMessage: (message: string) => void
+    logMessage: (message: string) => void,
   ): Promise<string | null> => {
     if (!plxDevice) {
-      logMessage("❌ No device connected, cannot fetch voltage");
+      logMessage("❌ No device connected");
       return null;
     }
-
     try {
-      logMessage("🔋 Fetching battery voltage...");
-
-      // First, perform adapter health check
-      try {
-        logMessage("🔍 Performing adapter health check...");
-        const healthResponse = await sendCommand(plxDevice, "AT", 1, 2000);
-        if (
-          !healthResponse ||
-          healthResponse.includes("ERROR") ||
-          healthResponse.includes("?")
-        ) {
-          logMessage(
-            "❌ Adapter health check failed - adapter may be unresponsive"
-          );
-          return null;
-        }
-        logMessage("✅ Adapter health check passed");
-      } catch (healthError) {
-        logMessage(
-          `⚠️ Health check failed: ${String(healthError)} - proceeding anyway`
-        );
-      }
-
-      // Wait a moment for adapter to stabilize
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Send voltage command with longer timeout and more retries
-      const response = await sendCommand(plxDevice, "AT RV", 3, 8000);
-
-      // Parse voltage from response
-      if (response) {
-        // Check for common failure responses
-        if (
-          response.includes("NO DATA") ||
-          response.includes("ERROR") ||
-          response.trim() === ""
-        ) {
-          logMessage(
-            `❌ Voltage command returned invalid response: "${response}"`
-          );
-          return null;
-        }
-
-        // Try multiple regex patterns for voltage parsing
-        const voltagePatterns = [
-          /(\d+\.?\d*)\s*V/i, // "12.5V" or "12.5 V"
-          /(\d+\.?\d*)/, // Just numbers like "12.5"
-          /([0-9]+(?:\.[0-9]+)?)/, // More specific number pattern
-        ];
-
-        for (const pattern of voltagePatterns) {
-          const voltageMatch = response.match(pattern);
-          if (voltageMatch) {
-            const voltage = voltageMatch[1];
-            const voltageNum = parseFloat(voltage);
-
-            // Validate voltage is in reasonable range (8-16V for car batteries)
-            if (voltageNum >= 8 && voltageNum <= 16) {
-              logMessage(`🔋 Detected voltage: ${voltage}V`);
-              return voltage;
-            } else {
-              logMessage(
-                `⚠️ Detected voltage ${voltage}V is outside normal range (8-16V)`
-              );
-              return voltage; // Still return it, but log the warning
-            }
-          }
-        }
-
-        logMessage(`📬 Raw response: "${response}" (could not parse voltage)`);
-        return null;
-      }
-
-      logMessage("❌ No response received for voltage command");
-      return null;
+      const service = createOBDService(plxDevice, sendCommand, logMessage);
+      return await service.getVoltage();
     } catch (error) {
-      logMessage(`❌ Error fetching voltage: ${String(error)}`);
+      logMessage(`❌ Error fetching voltage: ${error}`);
       return null;
     }
   },
 
   /**
-   * Fetch engine RPM
-   * OBD-II PID: 0C
-   */
-  fetchRPM: async (
-    plxDevice: Device | null,
-    sendCommand: (
-      device: Device,
-      command: string,
-      retries?: number,
-      customTimeoutMs?: number
-    ) => Promise<string>,
-    logMessage: (message: string) => void
-  ): Promise<number | null> => {
-    if (!plxDevice) {
-      logMessage("❌ No device connected, cannot fetch RPM");
-      return null;
-    }
-
-    try {
-      logMessage("🔄 Fetching engine RPM...");
-
-      // Send RPM command (PID: 0C) with AT prefix
-      const response = await sendCommand(plxDevice, "AT RV", 2);
-
-      // Parse RPM from response
-      if (response) {
-        const rpmRegex = /41 0C ([0-9A-F]{2}) ([0-9A-F]{2})/i;
-        const match = response.match(rpmRegex);
-
-        if (match) {
-          const a = parseInt(match[1], 16);
-          const b = parseInt(match[2], 16);
-          const rpm = (a * 256 + b) / 4;
-
-          logMessage(`🔄 Engine RPM: ${rpm}`);
-          return rpm;
-        } else {
-          logMessage(`❌ Could not parse RPM from response: ${response}`);
-          return null;
-        }
-      }
-
-      return null;
-    } catch (error) {
-      logMessage(`❌ Error fetching RPM: ${String(error)}`);
-      return null;
-    }
-  },
-
-  /**
-   * Get engine RPM (PID 0C) - with AT prefix
+   * @deprecated Use OBDIIService class instead
    */
   getEngineRPM: async (
     device: Device,
@@ -182,34 +729,30 @@ export const obdDataFunctions = {
       device: Device,
       command: string,
       retries?: number,
-      customTimeoutMs?: number
-    ) => Promise<string>
+      timeout?: number,
+    ) => Promise<string>,
   ): Promise<number> => {
     try {
-      console.log("Fetching engine RPM...");
-      // Send with AT prefix and spaces
-      const rpmResponse = await sendCommand(device, "AT 010C");
-      console.log("Engine RPM Response:", rpmResponse);
-
-      // Normalize response to string and split into lines
-      const responseStr = String(rpmResponse).replace(/\r/g, "\n");
+      const response = await sendCommand(device, "010C", 2, 5000);
+      const responseStr = String(response).replace(/\r/g, "\n");
       const lines = responseStr
         .split("\n")
         .map((l) => l.trim())
         .filter(Boolean);
-      // Find the last line that looks like a valid hex response (e.g., starts with 41 0C)
       const hexLine = lines.reverse().find((line) => /41\s*0C/i.test(line));
+
       if (!hexLine) return 0;
-      // Remove any non-hex characters (like OK, dots, etc.)
+
       const hexMatch = hexLine.match(
-        /41\s*0C\s*([0-9A-Fa-f]{2})\s*([0-9A-Fa-f]{2})/
+        /41\s*0C\s*([0-9A-Fa-f]{2})\s*([0-9A-Fa-f]{2})/,
       );
       if (!hexMatch) return 0;
+
       const A = parseInt(hexMatch[1], 16);
       const B = parseInt(hexMatch[2], 16);
       if (isNaN(A) || isNaN(B)) return 0;
-      const rpm = (A * 256 + B) / 4;
-      return rpm;
+
+      return (A * 256 + B) / 4;
     } catch (error) {
       console.error("Error getting engine RPM:", error);
       return 0;
@@ -217,7 +760,7 @@ export const obdDataFunctions = {
   },
 
   /**
-   * Get coolant temperature (PID 05) - with AT prefix
+   * @deprecated Use OBDIIService class instead
    */
   getCoolantTemperature: async (
     device: Device,
@@ -225,22 +768,18 @@ export const obdDataFunctions = {
       device: Device,
       command: string,
       retries?: number,
-      customTimeoutMs?: number
-    ) => Promise<string>
+      timeout?: number,
+    ) => Promise<string>,
   ): Promise<TemperatureData | null> => {
     try {
-      console.log("Fetching coolant temperature...");
-      // Send with AT prefix and spaces
-      const response = await sendCommand(device, "AT 0105");
-      console.log("Coolant Temperature Response:", response);
-
+      const response = await sendCommand(device, "0105", 2, 5000);
       const responseStr = String(response).replace(/\r/g, "\n");
       const lines = responseStr
         .split("\n")
         .map((l) => l.trim())
         .filter(Boolean);
-
       const hexLine = lines.reverse().find((line) => /41\s*05/i.test(line));
+
       if (!hexLine) return null;
 
       const hexMatch = hexLine.match(/41\s*05\s*([0-9A-Fa-f]{2})/);
@@ -260,7 +799,7 @@ export const obdDataFunctions = {
   },
 
   /**
-   * Get intake air temperature (PID 0F) - with AT prefix
+   * @deprecated Use OBDIIService class instead
    */
   getIntakeAirTemperature: async (
     device: Device,
@@ -268,22 +807,18 @@ export const obdDataFunctions = {
       device: Device,
       command: string,
       retries?: number,
-      customTimeoutMs?: number
-    ) => Promise<string>
+      timeout?: number,
+    ) => Promise<string>,
   ): Promise<TemperatureData | null> => {
     try {
-      console.log("Fetching intake air temperature...");
-      // Send with AT prefix and spaces
-      const response = await sendCommand(device, "AT 01 0F");
-      console.log("Intake Air Temperature Response:", response);
-
+      const response = await sendCommand(device, "010F", 2, 5000);
       const responseStr = String(response).replace(/\r/g, "\n");
       const lines = responseStr
         .split("\n")
         .map((l) => l.trim())
         .filter(Boolean);
-
       const hexLine = lines.reverse().find((line) => /41\s*0F/i.test(line));
+
       if (!hexLine) return null;
 
       const hexMatch = hexLine.match(/41\s*0F\s*([0-9A-Fa-f]{2})/);
@@ -303,7 +838,7 @@ export const obdDataFunctions = {
   },
 
   /**
-   * Get throttle position (PID 11) - with AT prefix
+   * @deprecated Use OBDIIService class instead
    */
   getThrottlePosition: async (
     device: Device,
@@ -311,22 +846,18 @@ export const obdDataFunctions = {
       device: Device,
       command: string,
       retries?: number,
-      customTimeoutMs?: number
-    ) => Promise<string>
+      timeout?: number,
+    ) => Promise<string>,
   ): Promise<number | null> => {
     try {
-      console.log("Fetching throttle position...");
-      // Send with AT prefix and spaces
-      const response = await sendCommand(device, "AT 0111");
-      console.log("Throttle Position Response:", response);
-
+      const response = await sendCommand(device, "0111", 2, 5000);
       const responseStr = String(response).replace(/\r/g, "\n");
       const lines = responseStr
         .split("\n")
         .map((l) => l.trim())
         .filter(Boolean);
-
       const hexLine = lines.reverse().find((line) => /41\s*11/i.test(line));
+
       if (!hexLine) return null;
 
       const hexMatch = hexLine.match(/41\s*11\s*([0-9A-Fa-f]{2})/);
@@ -336,8 +867,7 @@ export const obdDataFunctions = {
       if (isNaN(A)) return null;
 
       const throttlePercent = (A * 100) / 255;
-
-      return Math.round(throttlePercent * 10) / 10; // Round to 1 decimal place
+      return Math.round(throttlePercent * 10) / 10;
     } catch (error) {
       console.error("Error getting throttle position:", error);
       return null;
@@ -345,7 +875,7 @@ export const obdDataFunctions = {
   },
 
   /**
-   * Get fuel level (PID 2F) - with AT prefix
+   * @deprecated Use OBDIIService class instead
    */
   getFuelLevel: async (
     device: Device,
@@ -353,22 +883,18 @@ export const obdDataFunctions = {
       device: Device,
       command: string,
       retries?: number,
-      customTimeoutMs?: number
-    ) => Promise<string>
+      timeout?: number,
+    ) => Promise<string>,
   ): Promise<number | null> => {
     try {
-      console.log("Fetching fuel level...");
-      // Send with AT prefix and spaces
-      const response = await sendCommand(device, "AT 012F");
-      console.log("Fuel Level Response:", response);
-
+      const response = await sendCommand(device, "012F", 2, 5000);
       const responseStr = String(response).replace(/\r/g, "\n");
       const lines = responseStr
         .split("\n")
         .map((l) => l.trim())
         .filter(Boolean);
-
       const hexLine = lines.reverse().find((line) => /41\s*2F/i.test(line));
+
       if (!hexLine) return null;
 
       const hexMatch = hexLine.match(/41\s*2F\s*([0-9A-Fa-f]{2})/);
@@ -378,8 +904,7 @@ export const obdDataFunctions = {
       if (isNaN(A)) return null;
 
       const fuelPercent = (A * 100) / 255;
-
-      return Math.round(fuelPercent * 10) / 10; // Round to 1 decimal place
+      return Math.round(fuelPercent * 10) / 10;
     } catch (error) {
       console.error("Error getting fuel level:", error);
       return null;
@@ -387,7 +912,7 @@ export const obdDataFunctions = {
   },
 
   /**
-   * Get engine load (PID 04) - with AT prefix
+   * @deprecated Use OBDIIService class instead
    */
   getEngineLoad: async (
     device: Device,
@@ -395,22 +920,18 @@ export const obdDataFunctions = {
       device: Device,
       command: string,
       retries?: number,
-      customTimeoutMs?: number
-    ) => Promise<string>
+      timeout?: number,
+    ) => Promise<string>,
   ): Promise<number | null> => {
     try {
-      console.log("Fetching engine load...");
-      // Send with AT prefix and spaces
-      const response = await sendCommand(device, "AT 0104");
-      console.log("Engine Load Response:", response);
-
+      const response = await sendCommand(device, "0104", 2, 5000);
       const responseStr = String(response).replace(/\r/g, "\n");
       const lines = responseStr
         .split("\n")
         .map((l) => l.trim())
         .filter(Boolean);
-
       const hexLine = lines.reverse().find((line) => /41\s*04/i.test(line));
+
       if (!hexLine) return null;
 
       const hexMatch = hexLine.match(/41\s*04\s*([0-9A-Fa-f]{2})/);
@@ -420,8 +941,7 @@ export const obdDataFunctions = {
       if (isNaN(A)) return null;
 
       const loadPercent = (A * 100) / 255;
-
-      return Math.round(loadPercent * 10) / 10; // Round to 1 decimal place
+      return Math.round(loadPercent * 10) / 10;
     } catch (error) {
       console.error("Error getting engine load:", error);
       return null;
@@ -429,7 +949,7 @@ export const obdDataFunctions = {
   },
 
   /**
-   * Get manifold absolute pressure (PID 0B)
+   * @deprecated Use OBDIIService class instead
    */
   getManifoldPressure: async (
     device: Device,
@@ -437,21 +957,18 @@ export const obdDataFunctions = {
       device: Device,
       command: string,
       retries?: number,
-      customTimeoutMs?: number
-    ) => Promise<string>
+      timeout?: number,
+    ) => Promise<string>,
   ): Promise<number | null> => {
     try {
-      console.log("Fetching manifold pressure...");
-      const response = await sendCommand(device, "010B");
-      console.log("Manifold Pressure Response:", response);
-
+      const response = await sendCommand(device, "010B", 2, 5000);
       const responseStr = String(response).replace(/\r/g, "\n");
       const lines = responseStr
         .split("\n")
         .map((l) => l.trim())
         .filter(Boolean);
-
       const hexLine = lines.reverse().find((line) => /41\s*0B/i.test(line));
+
       if (!hexLine) return null;
 
       const hexMatch = hexLine.match(/41\s*0B\s*([0-9A-Fa-f]{2})/);
@@ -468,7 +985,7 @@ export const obdDataFunctions = {
   },
 
   /**
-   * Get vehicle speed (PID 0D) - with AT prefix
+   * @deprecated Use OBDIIService class instead
    */
   getVehicleSpeed: async (
     device: Device,
@@ -476,21 +993,18 @@ export const obdDataFunctions = {
       device: Device,
       command: string,
       retries?: number,
-      customTimeoutMs?: number
-    ) => Promise<string>
+      timeout?: number,
+    ) => Promise<string>,
   ): Promise<number | null> => {
     try {
-      console.log("Fetching vehicle speed...");
-      const response = await sendCommand(device, "AT 010D");
-      console.log("Vehicle Speed Response:", response);
-
+      const response = await sendCommand(device, "010D", 2, 5000);
       const responseStr = String(response).replace(/\r/g, "\n");
       const lines = responseStr
         .split("\n")
         .map((l) => l.trim())
         .filter(Boolean);
-
       const hexLine = lines.reverse().find((line) => /41\s*0D/i.test(line));
+
       if (!hexLine) return null;
 
       const hexMatch = hexLine.match(/41\s*0D\s*([0-9A-Fa-f]{2})/);
@@ -507,7 +1021,7 @@ export const obdDataFunctions = {
   },
 
   /**
-   * Get current voltage (legacy function for backward compatibility)
+   * @deprecated Use OBDIIService.getVoltage() instead
    */
   getCurrentVoltage: async (
     device: Device,
@@ -515,179 +1029,26 @@ export const obdDataFunctions = {
       device: Device,
       command: string,
       retries?: number,
-      customTimeoutMs?: number
-    ) => Promise<string>
+      timeout?: number,
+    ) => Promise<string>,
   ): Promise<string | null> => {
     try {
-      console.log("Fetching voltage...");
-      const voltageResponse = await sendCommand(device, "AT RV");
-      console.log("Voltage Response:", voltageResponse);
-
-      // Check if response contains "NO DATA"
+      const voltageResponse = await sendCommand(device, "AT RV", 2, 5000);
       const responseStr = String(voltageResponse);
+
       if (responseStr.includes("NO DATA")) {
-        console.log("Voltage command returned NO DATA");
         return null;
       }
 
-      // Look for voltage pattern (number followed by V)
       const voltageMatch = responseStr.match(/(\d+\.?\d*)\s*V/i);
       if (voltageMatch) {
-        return voltageMatch[1] + "V";
+        return voltageMatch[1];
       }
 
-      // If no voltage pattern found, return null
-      console.log("No valid voltage pattern found in response");
       return null;
     } catch (error) {
       console.error("Error getting voltage:", error);
       return null;
     }
   },
-
-  /**
-   * Get Diagnostic Trouble Codes (DTC) from vehicle - with AT prefix
-   */
-  getDTCCodes: async (
-    plxDevice: Device | null,
-    sendCommand: (
-      device: Device,
-      command: string,
-      retries?: number,
-      customTimeoutMs?: number
-    ) => Promise<string>,
-    logMessage: (message: string) => void
-  ): Promise<string[]> => {
-    if (!plxDevice) {
-      logMessage("❌ No device connected, cannot fetch DTC codes");
-      return [];
-    }
-
-    try {
-      logMessage("🔍 Fetching DTC codes...");
-
-      // Send command to get stored DTC codes with AT prefix
-      const dtcResponse = await sendCommand(plxDevice, "AT03", 3, 5000);
-      logMessage(`DTC Response: ${dtcResponse}`);
-
-      const responseStr = String(dtcResponse).toUpperCase();
-
-      // Check for NO DATA response
-      if (responseStr.includes("NO DATA") || responseStr.includes("43 00")) {
-        logMessage("No DTC codes found");
-        return [];
-      }
-
-      // Parse DTC codes from response
-      // Format: 43 XX XX XX XX... where each XX XX is a DTC code
-      const dtcCodes: string[] = [];
-      const lines = responseStr.split("\n");
-
-      for (const line of lines) {
-        if (line.includes("43")) {
-          // Remove header and parse DTC codes
-          const dataPart = line.split("43")[1]?.trim();
-          if (dataPart) {
-            // Each DTC code is 4 characters (2 bytes)
-            for (let i = 0; i < dataPart.length; i += 4) {
-              const dtcHex = dataPart.substr(i, 4);
-              if (dtcHex.length === 4) {
-                // Convert hex to DTC format (e.g., "0123" -> "P0123")
-                const firstByte = parseInt(dtcHex.substr(0, 2), 16);
-                const secondByte = parseInt(dtcHex.substr(2, 2), 16);
-
-                // First byte: bits 7-6 = DTC type, bits 5-0 = first DTC digit
-                const dtcType = (firstByte >> 6) & 0x03;
-                const firstDigit = firstByte & 0x3f;
-
-                // Second byte: second and third DTC digits
-                const secondDigit = (secondByte >> 4) & 0x0f;
-                const thirdDigit = secondByte & 0x0f;
-
-                // Convert to standard DTC format
-                let dtcPrefix = "P"; // Powertrain
-                if (dtcType === 1) dtcPrefix = "C"; // Chassis
-                else if (dtcType === 2) dtcPrefix = "B"; // Body
-                else if (dtcType === 3) dtcPrefix = "U"; // Network
-
-                const dtcCode = `${dtcPrefix}${firstDigit
-                  .toString()
-                  .padStart(2, "0")}${secondDigit}${thirdDigit}`;
-                dtcCodes.push(dtcCode);
-              }
-            }
-          }
-        }
-      }
-
-      logMessage(
-        `Found ${dtcCodes.length} DTC code(s): ${dtcCodes.join(", ")}`
-      );
-      return dtcCodes;
-    } catch (error) {
-      logMessage(`❌ Error fetching DTC codes: ${error}`);
-      return [];
-    }
-  },
-
-  /**
-   * Clear Diagnostic Trouble Codes from vehicle
-   */
-  clearDTCCodes: async (
-    plxDevice: Device | null,
-    sendCommand: (
-      device: Device,
-      command: string,
-      retries?: number,
-      customTimeoutMs?: number
-    ) => Promise<string>,
-    logMessage: (message: string) => void
-  ): Promise<boolean> => {
-    if (!plxDevice) {
-      logMessage("❌ No device connected, cannot clear DTC codes");
-      return false;
-    }
-
-    try {
-      logMessage("🧹 Clearing DTC codes...");
-
-      // Send command to clear DTC codes
-      const clearResponse = await sendCommand(plxDevice, "04", 3, 5000);
-      logMessage(`Clear DTC Response: ${clearResponse}`);
-
-      const responseStr = String(clearResponse).toUpperCase();
-
-      // Check for successful response
-      if (responseStr.includes("44") || responseStr.includes("OK")) {
-        logMessage("✅ DTC codes cleared successfully");
-        return true;
-      } else {
-        logMessage("❌ Failed to clear DTC codes");
-        return false;
-      }
-    } catch (error) {
-      logMessage(`❌ Error clearing DTC codes: ${error}`);
-      return false;
-    }
-  },
-};
-
-/**
- * Legacy PID Commands Hook (for backward compatibility)
- * @deprecated Use obdDataFunctions instead for better error handling
- */
-export const usePidCommands = () => {
-  // This would need to be updated to use the new BLE connection context
-  // For now, returning empty functions to maintain compatibility
-  return {
-    getCurrentVoltage: async (device: Device) => null,
-    getEngineRPM: async (device: Device) => 0,
-    getVehicleSpeed: async (device: Device) => null,
-    getCoolantTemperature: async (device: Device) => null,
-    getIntakeAirTemperature: async (device: Device) => null,
-    getThrottlePosition: async (device: Device) => null,
-    getFuelLevel: async (device: Device) => null,
-    getEngineLoad: async (device: Device) => null,
-    getManifoldPressure: async (device: Device) => null,
-  };
 };

@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Share, StatusBar } from "react-native";
+import { Share, StatusBar, View, ActivityIndicator } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
@@ -90,7 +90,7 @@ export type RootStackParamList = {
   JobDetails: { jobId: string };
   DiagnosticAssistant: undefined;
   MechanicDashboard: undefined;
-  ScanDevices: undefined;
+  ScanDevices: { vehicleId?: string };
   Profile: undefined;
   EditVehicleInfo: { vehicle: any; userId: string };
   AddVehicle: undefined;
@@ -127,6 +127,12 @@ function VehiclesStackScreen() {
         headerStyle: { backgroundColor: colors.primary[500] },
         headerTintColor: colors.white,
         headerTitleStyle: { fontWeight: "bold", fontSize: 20 },
+        headerBlurEffect: "none",
+        headerTransparent: false,
+        headerShadowVisible: false,
+        headerBackground: () => (
+          <View style={{ flex: 1, backgroundColor: colors.primary[500] }} />
+        ),
       }}
     >
       <VehiclesStack.Screen
@@ -243,8 +249,6 @@ function MainTabs() {
   );
 }
 
-import { View, ActivityIndicator } from "react-native";
-
 export default function AppNavigator() {
   const { user, isLoading, profile, viewMode } = useAuth();
   const { colors } = useTheme();
@@ -285,6 +289,12 @@ export default function AppNavigator() {
         headerStyle: { backgroundColor: colors.primary[500] },
         headerTintColor: colors.white,
         headerTitleStyle: { fontWeight: "bold", fontSize: 20 },
+        headerBlurEffect: "none",
+        headerTransparent: false,
+        headerShadowVisible: false,
+        headerBackground: () => (
+          <View style={{ flex: 1, backgroundColor: colors.primary[500] }} />
+        ),
       }}
     >
       {user ? (
@@ -327,7 +337,11 @@ export default function AppNavigator() {
             component={JobDetails}
             options={{ title: "Job Details" }}
           />
-          <Stack.Screen name="ScanDevices" component={ScanDevicesScreen} />
+          <Stack.Screen
+            name="ScanDevices"
+            component={ScanDevicesScreen}
+            options={{ title: "Scan Devices" }}
+          />
           <Stack.Screen
             name="EditVehicleInfo"
             component={EditVehicleInfoScreen}
