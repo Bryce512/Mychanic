@@ -17,12 +17,12 @@ import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { useBluetooth } from "../contexts/BluetoothContext";
 import { useDiagnostics } from "../contexts/VehicleDiagnosticsContext";
-import { obdDataFunctions } from "../services/obdService";
 import Card, { CardContent, CardHeader } from "../components/Card";
 import Button from "../components/Button";
 import ServiceEditModal from "../components/ServiceEditModal";
 import { colors } from "../theme/colors";
 import firebaseService from "../services/firebaseService";
+import { useOBDEngine } from "../hooks/useOBDEngine";
 
 type RootStackParamList = {
   FullDiagnostics: { vehicleId: string };
@@ -41,6 +41,13 @@ export default function FullDiagnosticsScreen() {
   const isDark = colorScheme === "dark";
   const bluetoothContext = useBluetooth();
   const diagnosticsContext = useDiagnostics();
+
+  // Initialize OBD engine hook
+  const obdEngine = useOBDEngine(
+    bluetoothContext.plxDevice,
+    bluetoothContext.sendCommand,
+    { autoInitialize: true },
+  );
 
   const [isScanningDTC, setIsScanningDTC] = useState(false);
   const [dtcCodes, setDtcCodes] = useState<string[]>([]);
@@ -64,7 +71,7 @@ export default function FullDiagnosticsScreen() {
   // Modal state
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editModalType, setEditModalType] = useState<"service" | "maintenance">(
-    "service"
+    "service",
   );
   const [editModalTitle, setEditModalTitle] = useState("");
 
@@ -115,35 +122,32 @@ export default function FullDiagnosticsScreen() {
 
   // Scan for DTC codes
   const scanForDTCCodes = async () => {
-    const { deviceId, isConnected, plxDevice } = bluetoothContext;
+    const { isConnected, plxDevice } = bluetoothContext;
 
     if (!isConnected || !plxDevice) {
       Alert.alert(
         "No OBD-II Device Connected",
-        "Please connect to an OBD-II device first."
+        "Please connect to an OBD-II device first.",
       );
       return;
     }
 
     setIsScanningDTC(true);
     try {
-      const codes = await obdDataFunctions.getDTCCodes(
-        plxDevice,
-        bluetoothContext.sendCommand,
-        (message) => console.log(`[DTC SCAN] ${message}`)
-      );
+      const codes = await obdEngine.getActiveDTCs();
 
       if (codes && codes.length > 0) {
-        setDtcCodes(codes);
+        const codeStrings = codes.map((dtc) => dtc.code);
+        setDtcCodes(codeStrings);
         // Save DTC codes directly to vehicle document
         await firebaseService.updateVehicle(vehicleId, {
-          dtcCodes: codes,
+          dtcCodes: codeStrings,
         });
         await diagnosticsContext.refreshDiagnostics();
 
         Alert.alert(
           "DTC Codes Found",
-          `Found ${codes.length} diagnostic trouble code(s).`
+          `Found ${codes.length} diagnostic trouble code(s).`,
         );
       } else {
         setDtcCodes([]);
@@ -175,17 +179,17 @@ export default function FullDiagnosticsScreen() {
 
       if (maintenanceConfig.milesBetweenOilChanges) {
         maintConfigUpdates.milesBetweenOilChanges = parseInt(
-          maintenanceConfig.milesBetweenOilChanges
+          maintenanceConfig.milesBetweenOilChanges,
         );
       }
       if (maintenanceConfig.milesBetweenBrakeChanges) {
         maintConfigUpdates.milesBetweenBrakeChanges = parseInt(
-          maintenanceConfig.milesBetweenBrakeChanges
+          maintenanceConfig.milesBetweenBrakeChanges,
         );
       }
       if (maintenanceConfig.milesBetweenTireService) {
         maintConfigUpdates.milesBetweenTireService = parseInt(
-          maintenanceConfig.milesBetweenTireService
+          maintenanceConfig.milesBetweenTireService,
         );
       }
 
@@ -197,7 +201,7 @@ export default function FullDiagnosticsScreen() {
       }
       if (serviceHistory.milesAtLastOilChange) {
         vehicleUpdates.milesAtLastOilChange = parseInt(
-          serviceHistory.milesAtLastOilChange
+          serviceHistory.milesAtLastOilChange,
         );
       }
       if (serviceHistory.lastBrakeService) {
@@ -205,7 +209,7 @@ export default function FullDiagnosticsScreen() {
       }
       if (serviceHistory.milesAtLastBrakeService) {
         vehicleUpdates.milesAtLastBrakeService = parseInt(
-          serviceHistory.milesAtLastBrakeService
+          serviceHistory.milesAtLastBrakeService,
         );
       }
       if (serviceHistory.lastTireService) {
@@ -213,7 +217,7 @@ export default function FullDiagnosticsScreen() {
       }
       if (serviceHistory.milesAtLastTireService) {
         vehicleUpdates.milesAtLastTireService = parseInt(
-          serviceHistory.milesAtLastTireService
+          serviceHistory.milesAtLastTireService,
         );
       }
 
@@ -236,7 +240,7 @@ export default function FullDiagnosticsScreen() {
       if (showAlerts) {
         Alert.alert(
           "Success",
-          "Service history and maintenance configuration updated successfully."
+          "Service history and maintenance configuration updated successfully.",
         );
       }
     } catch (error) {
@@ -258,29 +262,22 @@ export default function FullDiagnosticsScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const { plxDevice } = bluetoothContext;
-              if (plxDevice) {
-                await obdDataFunctions.clearDTCCodes(
-                  plxDevice,
-                  bluetoothContext.sendCommand,
-                  (message) => console.log(`[CLEAR DTC] ${message}`)
-                );
+              await obdEngine.clearDTCs();
 
-                setDtcCodes([]);
-                await firebaseService.updateVehicle(vehicleId, {
-                  dtcCodes: [],
-                });
-                await diagnosticsContext.refreshDiagnostics();
+              setDtcCodes([]);
+              await firebaseService.updateVehicle(vehicleId, {
+                dtcCodes: [],
+              });
+              await diagnosticsContext.refreshDiagnostics();
 
-                Alert.alert("Success", "DTC codes cleared successfully.");
-              }
+              Alert.alert("Success", "DTC codes cleared successfully.");
             } catch (error) {
               console.error("Error clearing DTC codes:", error);
               Alert.alert("Error", "Failed to clear DTC codes.");
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -290,7 +287,7 @@ export default function FullDiagnosticsScreen() {
       label: string;
       date?: string;
       mileage?: string;
-    }>
+    }>,
   ) => {
     try {
       const currentUser = firebaseService.getCurrentUser();

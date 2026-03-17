@@ -22,8 +22,11 @@ import {
 } from "../services/vehicleDataService";
 import { Feather } from "@expo/vector-icons";
 import { useBluetooth } from "../contexts/BluetoothContext";
-import { createOBDService } from "../services/obdService";
-import BluetoothDeviceSelector from "./BluetoothDeviceSelector";
+import { useVINScanning } from "../hooks/useOBDEngine";
+import {
+  DeviceConnectionFlow,
+  DeviceConnectionAction,
+} from "./DeviceConnectionFlow";
 import firebaseService from "../services/firebaseService";
 import type { BluetoothDevice } from "../services/bleConnections";
 
@@ -77,12 +80,19 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
   const [lookupLoading, setLookupLoading] = useState(false);
 
   // OBD Scanning state
-  const [showOBDScanner, setShowOBDScanner] = useState(false);
-  const [scanningVIN, setScanningVIN] = useState(false);
+  const [showConnectionFlow, setShowConnectionFlow] = useState(false);
   const [existingVehicles, setExistingVehicles] = useState<any[]>([]);
   const [showVehicleSelector, setShowVehicleSelector] = useState(false);
   const [scannedVehicleData, setScannedVehicleData] = useState<any>(null);
+  const [connectedDevice, setConnectedDevice] =
+    useState<BluetoothDevice | null>(null);
   const bluetoothContext = useBluetooth();
+
+  // Initialize VIN scanning hook
+  const { scanVIN, isScanning: scanningVIN } = useVINScanning(
+    bluetoothContext.plxDevice,
+    bluetoothContext.sendCommand,
+  );
 
   // NHTSA dropdown state
   const [vehicleYears, setVehicleYears] = useState<VehicleYear[]>([]);
@@ -285,175 +295,122 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
   const handleScanVINFromOBD = async () => {
     // Show modal immediately and start scanning
     try {
-      setShowOBDScanner(true);
+      setShowConnectionFlow(true);
       await bluetoothContext.startScan();
     } catch (error) {
       console.error("Failed to start scan:", error);
       Alert.alert("Error", "Failed to start scanning for devices");
-      setShowOBDScanner(false);
+      setShowConnectionFlow(false);
     }
   };
 
-  const handleOBDDeviceSelected = async (
-    device: BluetoothDevice,
-  ): Promise<boolean> => {
-    setScanningVIN(true);
+  // Handle connection success - ask user what to do
+  const handleConnectionSuccess = async (device: BluetoothDevice) => {
+    setConnectedDevice(device);
 
-    try {
-      // Connect to the selected device
-      const connected = await bluetoothContext.connectToDevice(device);
+    // Ask user if they want to create new or use existing vehicle
+    const currentUser = firebaseService.getCurrentUser();
+    const userVehicles = currentUser
+      ? await firebaseService.getVehicles(currentUser.uid)
+      : [];
+    setExistingVehicles(userVehicles);
 
-      if (!connected || !bluetoothContext.plxDevice) {
-        Alert.alert("Error", "Failed to connect to OBD-II device");
-        setScanningVIN(false);
-        return false;
-      }
-
-      // Wait a moment for connection to stabilize
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Create OBD service and get VIN
-      const obdService = createOBDService(
-        bluetoothContext.plxDevice,
-        bluetoothContext.sendCommand,
-        (msg) => console.log(msg),
+    // Show choice dialog only if user has existing vehicles
+    if (currentUser && userVehicles && userVehicles.length > 0) {
+      Alert.alert("Select Action", "What would you like to do?", [
+        {
+          text: "Create New Vehicle",
+          onPress: () => {
+            Alert.alert(
+              "Scanning VIN",
+              "Scanning vehicle identification number from OBD-II device...",
+            );
+            proceedWithVINScan("new", userVehicles);
+          },
+        },
+        {
+          text: "Update Existing Vehicle",
+          onPress: () => {
+            Alert.alert(
+              "Scanning VIN",
+              "Scanning vehicle identification number from OBD-II device...",
+            );
+            proceedWithVINScan("existing", userVehicles);
+          },
+        },
+        {
+          text: "Cancel",
+          style: "cancel",
+          onPress: () => {
+            setShowConnectionFlow(false);
+          },
+        },
+      ]);
+    } else {
+      // No existing vehicles or not logged in, proceed with new vehicle
+      Alert.alert(
+        "Scanning VIN",
+        "Scanning vehicle identification number from OBD-II device...",
       );
+      proceedWithVINScan("new", userVehicles);
+    }
+  };
 
-      const vinFromOBD = await obdService.getVIN();
+  const proceedWithVINScan = async (
+    userChoice: "new" | "existing",
+    existingVehicles: any[],
+  ) => {
+    try {
+      // Step 3: Scan VIN using the hook - returns full vehicle data (vin, year, make, model)
+      console.log("VehicleForm: Starting VIN scan...");
+      const vinResult = await scanVIN();
 
-      if (!vinFromOBD) {
+      if (!vinResult || !vinResult.vin) {
         Alert.alert(
           "VIN Not Available",
           "Unable to access VIN from this vehicle. Please create the vehicle manually.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                setShowConnectionFlow(false);
+              },
+            },
+          ],
         );
-        setScanningVIN(false);
-        setShowOBDScanner(false);
-        return true; // Connection succeeded, but VIN not available
+        return;
       }
 
-      // Decode VIN using NHTSA API
-      const response = await fetch(
-        `https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${vinFromOBD}?format=json`,
-      );
-      const data = await response.json();
+      console.log("VehicleForm: VIN retrieved:", vinResult.vin);
 
-      if (data.Results && data.Results.length > 0) {
-        const vehicleData: any = { vin: vinFromOBD };
-        data.Results.forEach((result: any) => {
-          switch (result.Variable) {
-            case "Model Year":
-              if (result.Value && result.Value !== "Not Applicable") {
-                vehicleData.year = result.Value;
-              }
-              break;
-            case "Make":
-              if (result.Value && result.Value !== "Not Applicable") {
-                vehicleData.make = result.Value;
-              }
-              break;
-            case "Model":
-              if (result.Value && result.Value !== "Not Applicable") {
-                vehicleData.model = result.Value;
-              }
-              break;
-            case "Engine Model":
-            case "Engine Configuration":
-              if (result.Value && result.Value !== "Not Applicable") {
-                vehicleData.engine = vehicleData.engine
-                  ? `${vehicleData.engine} ${result.Value}`
-                  : result.Value;
-              }
-              break;
-            case "Displacement (L)":
-              if (result.Value && result.Value !== "Not Applicable") {
-                vehicleData.engine = vehicleData.engine
-                  ? `${result.Value}L ${vehicleData.engine}`
-                  : `${result.Value}L`;
-              }
-              break;
-          }
-        });
+      // Build vehicle data from scan result
+      const vehicleData: any = {
+        vin: vinResult.vin,
+        ...(vinResult.year && { year: vinResult.year }),
+        ...(vinResult.make && { make: vinResult.make }),
+        ...(vinResult.model && { model: vinResult.model }),
+      };
 
-        setScannedVehicleData(vehicleData);
+      setScannedVehicleData(vehicleData);
 
-        // Check if user has existing vehicles
-        const currentUser = firebaseService.getCurrentUser();
-        if (currentUser) {
-          const userVehicles = await firebaseService.getVehicles(
-            currentUser.uid,
-          );
-          if (userVehicles && userVehicles.length > 0) {
-            setExistingVehicles(userVehicles);
-
-            // Show alert asking if they want to create new or edit existing
-            const vehicleDescription =
-              `${vehicleData.year || ""} ${vehicleData.make || ""} ${vehicleData.model || ""}`.trim();
-            Alert.alert(
-              "Vehicle Found",
-              `Found a ${vehicleDescription}. Would you like to create a new vehicle or update an existing one?`,
-              [
-                {
-                  text: "Create New",
-                  onPress: () => {
-                    populateFormWithVehicleData(vehicleData);
-                    setScanningVIN(false);
-                    setShowOBDScanner(false);
-                  },
-                },
-                {
-                  text: "Update Existing",
-                  onPress: () => {
-                    setShowVehicleSelector(true);
-                    setScanningVIN(false);
-                    setShowOBDScanner(false);
-                  },
-                },
-                {
-                  text: "Cancel",
-                  style: "cancel",
-                  onPress: () => {
-                    setScanningVIN(false);
-                    setShowOBDScanner(false);
-                  },
-                },
-              ],
-            );
-          } else {
-            // No existing vehicles, just populate the form
-            populateFormWithVehicleData(vehicleData);
-            Alert.alert(
-              "Success",
-              "Vehicle information retrieved successfully!",
-            );
-            setScanningVIN(false);
-            setShowOBDScanner(false);
-          }
-        } else {
-          // Not logged in, just populate form
-          populateFormWithVehicleData(vehicleData);
-          Alert.alert("Success", "Vehicle information retrieved successfully!");
-          setScanningVIN(false);
-          setShowOBDScanner(false);
-        }
-        return true;
+      // Step 4: Handle based on user choice
+      if (userChoice === "existing" && existingVehicles.length > 0) {
+        setExistingVehicles(existingVehicles);
+        setShowVehicleSelector(true);
+        setShowConnectionFlow(false);
       } else {
-        Alert.alert(
-          "Error",
-          "Could not retrieve vehicle information for this VIN. Please create the vehicle manually.",
-        );
-        setScanningVIN(false);
-        setShowOBDScanner(false);
-        return true;
+        // New vehicle - populate form
+        populateFormWithVehicleData(vehicleData);
+        Alert.alert("Success", "Vehicle information retrieved successfully!");
+        setShowConnectionFlow(false);
       }
     } catch (error) {
-      console.error("OBD VIN scan error:", error);
+      console.error("VIN scan error:", error);
       Alert.alert(
         "Error",
         "Failed to retrieve VIN from OBD-II device. Please try again or enter VIN manually.",
       );
-      setScanningVIN(false);
-      setShowOBDScanner(false);
-      return false;
+      setShowConnectionFlow(false);
     }
   };
 
@@ -937,14 +894,11 @@ const VehicleForm: React.FC<VehicleFormProps> = ({
         </View>
       </Modal>
 
-      {/* OBD Scanner Modal */}
-      <BluetoothDeviceSelector
-        visible={showOBDScanner}
-        onClose={() => setShowOBDScanner(false)}
-        devices={bluetoothContext.discoveredDevices}
-        onSelectDevice={handleOBDDeviceSelected}
-        isScanning={bluetoothContext.isScanning}
-        onScanAgain={bluetoothContext.startScan}
+      {/* Device Connection Flow */}
+      <DeviceConnectionFlow
+        visible={showConnectionFlow}
+        onClose={() => setShowConnectionFlow(false)}
+        onConnectionSuccess={handleConnectionSuccess}
       />
 
       {/* Vehicle Selector Modal */}

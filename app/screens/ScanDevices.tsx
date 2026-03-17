@@ -2,7 +2,7 @@
  * Scan Devices Screen - Professional DTC Scanner
  * Focused on OBD-II connection and diagnostic trouble code scanning
  */
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   ScrollView,
@@ -25,11 +25,9 @@ import {
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { useRoute, RouteProp } from "@react-navigation/native";
 import { useBluetooth } from "../contexts/BluetoothContext";
+import { useOBDEngine } from "../hooks/useOBDEngine";
 import BluetoothDeviceSelector from "../components/BluetoothDeviceSelector";
-import {
-  createOBDService,
-  DiagnosticTroubleCode,
-} from "../services/obdService";
+import type { DiagnosticTroubleCode } from "../services/obd";
 import { colors } from "../theme/colors";
 
 type ScanDevicesRouteProp = RouteProp<
@@ -40,6 +38,7 @@ type ScanDevicesRouteProp = RouteProp<
 const ScanDevicesScreen = () => {
   const route = useRoute<ScanDevicesRouteProp>();
   const vehicleId = route.params?.vehicleId;
+
   // Bluetooth context
   const {
     isScanning,
@@ -54,6 +53,11 @@ const ScanDevicesScreen = () => {
     sendCommand,
     logMessage,
   } = useBluetooth();
+
+  // OBD Engine hook
+  const obdEngine = useOBDEngine(plxDevice, sendCommand, {
+    autoInitialize: true,
+  });
 
   // Local state
   const [showDeviceSelector, setShowDeviceSelector] = useState(false);
@@ -73,16 +77,31 @@ const ScanDevicesScreen = () => {
     setIsScanningDTC(true);
 
     try {
-      const obdService = createOBDService(plxDevice, sendCommand, logMessage);
+      // Initialize engine if needed
+      if (!obdEngine.isInitialized) {
+        console.log("[ScanDevices] Initializing OBD engine...");
+        const initialized = await obdEngine.initialize();
+        if (!initialized) {
+          Alert.alert("Connection Error", "Failed to initialize OBD engine");
+          return;
+        }
+      }
 
-      // Get DTCs
-      const codes = await obdService.getDTCs();
+      // Get active DTCs
+      console.log("[ScanDevices] Scanning for DTCs...");
+      const codes = await obdEngine.getActiveDTCs();
       setDtcCodes(codes);
       setLastScanTime(new Date());
 
-      // Also get voltage
-      const voltageData = await obdService.getVoltage();
-      setVoltage(voltageData);
+      // Get voltage separately
+      try {
+        const voltageResult = await obdEngine.queryPID("ATRV");
+        if (voltageResult?.value) {
+          setVoltage(String(voltageResult.value));
+        }
+      } catch (error) {
+        console.log("[ScanDevices] Voltage query failed (optional):", error);
+      }
 
       if (codes.length === 0) {
         Alert.alert(
@@ -119,12 +138,16 @@ const ScanDevicesScreen = () => {
           style: "destructive",
           onPress: async () => {
             try {
-              const obdService = createOBDService(
-                plxDevice,
-                sendCommand,
-                logMessage,
-              );
-              const success = await obdService.clearDTCs();
+              if (!obdEngine.isInitialized) {
+                const initialized = await obdEngine.initialize();
+                if (!initialized) {
+                  Alert.alert("Error", "Failed to initialize OBD engine");
+                  return;
+                }
+              }
+
+              console.log("[ScanDevices] Clearing DTCs...");
+              const success = await obdEngine.clearDTCs();
 
               if (success) {
                 setDtcCodes([]);

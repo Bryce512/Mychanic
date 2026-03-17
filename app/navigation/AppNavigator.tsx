@@ -70,7 +70,7 @@ import SignupScreen from "../screens/Signup";
 import EditVehicleInfoScreen from "../screens/EditVehicleInfo";
 import AddProfileScreen from "../screens/AddProfile";
 import EditProfileScreen from "../screens/EditProfile";
-import DiagnosticAssistantScreen from "../screens/DiagnosticChat";
+import DiagnosticAssistantScreen from "../screens/AI_Diagnostics";
 import MechanicDashboardScreen from "../screens/MechanicDashboard";
 import LiveDataScreen from "../screens/LiveData";
 import JobsListScreen from "../screens/JobsList";

@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -13,11 +19,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { useBluetooth } from "../contexts/BluetoothContext";
-import { obdDataFunctions, createOBDService } from "../services/obdService";
-import { obdDataFunctions as obdFunctions } from "../services/obdService";
-import Card, { CardContent, CardHeader } from "../components/Card";
+import { useOBDEngine } from "../hooks/useOBDEngine";
+import Card, { CardContent } from "../components/Card";
 import LiveDataParameter from "../components/LiveDataParameter";
 import { colors } from "../theme/colors";
+import type { ParsedPIDResult } from "../services/obd/pidParser";
 
 interface LiveDataItem {
   id: string;
@@ -108,7 +114,7 @@ const initializeLiveData = (): LiveDataItem[] => [
     label: "Manifold Pressure",
     value: null,
     unit: "kPa",
-    icon: "gauge",
+    icon: "wind",
     color: colors.accent[700],
     priority: 9,
   },
@@ -119,234 +125,129 @@ export default function LiveDataScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const bluetoothContext = useBluetooth();
+  const obdEngine = useOBDEngine(
+    bluetoothContext.plxDevice,
+    bluetoothContext.sendCommand,
+    { autoInitialize: true },
+  );
+
   const [refreshing, setRefreshing] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // const pidService = pidCommands();
 
   // Initialize live data structure with all parameters shown
   const [liveData, setLiveData] = useState<LiveDataItem[]>(() =>
     initializeLiveData(),
   );
 
-  // Fetch all live data
+  // Core PIDs to query (memoized to prevent unnecessary re-renders)
+  const CORE_PIDS = useMemo(
+    () => [
+      "ATRV", // Voltage (not a standard PID but commonly supported)
+      "010C", // RPM
+      "010D", // Speed
+      "0105", // Coolant Temp
+      "0104", // Engine Load
+      "0111", // Throttle Position
+      "012F", // Fuel Level
+      "010F", // Intake Air Temp
+      "010B", // Manifold Pressure
+    ],
+    [],
+  );
+
+  // Fetch live data using batch query (more efficient)
   const fetchLiveData = async () => {
     const { plxDevice, isConnected } = bluetoothContext;
 
     if (!isConnected || !plxDevice) {
-      Alert.alert("No Connection", "Please connect to an OBD-II device first.");
+      // Silently fail when device disconnected during polling - don't show alert
+      // Only stop polling and return
+      if (pollingRef.current.active) {
+        pollingRef.current.active = false;
+        if (pollingRef.current.timeoutId) {
+          clearTimeout(pollingRef.current.timeoutId);
+          pollingRef.current.timeoutId = null;
+        }
+        setIsPolling(false);
+        console.log("[LiveData] Polling stopped - device disconnected");
+      }
       return;
     }
 
     try {
-      // Small delay between commands to allow device to process
-      const COMMAND_SPACING_MS = 200;
-
-      // Fetch voltage with enhanced error handling
-      try {
-        console.log("Sending voltage command...");
-        const voltage = await obdDataFunctions.fetchVoltage(
-          plxDevice,
-          bluetoothContext.sendCommand,
-          (message) => console.log(`[VOLTAGE] ${message}`),
-        );
-        console.log("Voltage raw response:", voltage);
-        if (voltage) {
-          const voltageValue = parseFloat(voltage);
-          console.log("Parsed voltage value:", voltageValue);
-          setLiveData((prevData) =>
-            prevData.map((item) =>
-              item.id === "voltage"
-                ? { ...item, value: voltageValue.toFixed(1) }
-                : item,
-            ),
-          );
-        } else {
-          console.log("Voltage returned null or invalid");
+      // Initialize engine if needed
+      if (!obdEngine.isInitialized) {
+        console.log("[LiveData] Initializing OBD engine...");
+        const initialized = await obdEngine.initialize();
+        if (!initialized) {
+          Alert.alert("Connection Error", "Failed to initialize OBD engine");
+          return;
         }
-      } catch (e) {
-        console.log("Failed to fetch voltage:", e);
       }
-      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
 
-      // Fetch RPM
-      try {
-        console.log("Sending RPM command...");
-        const rpm = await obdDataFunctions.getEngineRPM(
-          plxDevice,
-          bluetoothContext.sendCommand,
-        );
-        console.log("RPM raw response:", rpm);
-        if (rpm && typeof rpm === "number") {
-          console.log("Parsed RPM value:", rpm);
-          setLiveData((prevData) =>
-            prevData.map((item) =>
-              item.id === "rpm" ? { ...item, value: Math.round(rpm) } : item,
-            ),
-          );
-        }
-      } catch (e) {
-        console.log("Failed to fetch RPM:", e);
-      }
-      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
+      // Callback that updates state after each PID completes
+      const updateForPID = (
+        pidCode: string,
+        result: ParsedPIDResult | null,
+      ) => {
+        setLiveData((prevData) => {
+          const getPIDValue = (): string | number | null => {
+            if (!result || !("value" in result)) {
+              return null;
+            }
+            const value = result.value as number;
 
-      // Fetch vehicle speed
-      try {
-        console.log("Sending speed command...");
-        const speed = await obdDataFunctions.getVehicleSpeed(
-          plxDevice,
-          bluetoothContext.sendCommand,
-        );
-        console.log("Speed raw response:", speed);
-        if (speed !== null) {
-          console.log("Parsed speed value:", speed);
-          setLiveData((prevData) =>
-            prevData.map((item) =>
-              item.id === "speed" ? { ...item, value: speed } : item,
-            ),
-          );
-        }
-      } catch (e) {
-        console.log("Failed to fetch speed:", e);
-      }
-      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
+            // Apply PID-specific formatting
+            switch (pidCode) {
+              case "010C":
+                return Math.round(value); // RPM
+              case "010D":
+              case "0105":
+              case "0104":
+              case "0111":
+              case "012F":
+              case "010F":
+              case "010B":
+                return value;
+              case "ATRV":
+                return parseFloat(value.toString()).toFixed(1); // Voltage
+              default:
+                return value;
+            }
+          };
 
-      // Fetch coolant temperature
-      try {
-        console.log("Sending coolant temperature command...");
-        const coolantTemp = await obdDataFunctions.getCoolantTemperature(
-          plxDevice,
-          bluetoothContext.sendCommand,
-        );
-        console.log("Coolant temp raw response:", coolantTemp);
-        if (coolantTemp) {
-          console.log("Parsed coolant temp value:", coolantTemp.celsius);
-          setLiveData((prevData) =>
-            prevData.map((item) =>
-              item.id === "coolantTemp"
-                ? { ...item, value: coolantTemp.celsius }
-                : item,
-            ),
-          );
-        }
-      } catch (e) {
-        console.log("Failed to fetch coolant temperature:", e);
-      }
-      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
+          // Map PIDs to live data items
+          return prevData.map((item) => {
+            if (pidCode === "ATRV" && item.id === "voltage") {
+              return { ...item, value: getPIDValue() };
+            } else if (pidCode === "010C" && item.id === "rpm") {
+              return { ...item, value: getPIDValue() };
+            } else if (pidCode === "010D" && item.id === "speed") {
+              return { ...item, value: getPIDValue() };
+            } else if (pidCode === "0105" && item.id === "coolantTemp") {
+              return { ...item, value: getPIDValue() };
+            } else if (pidCode === "0104" && item.id === "engineLoad") {
+              return { ...item, value: getPIDValue() };
+            } else if (pidCode === "0111" && item.id === "throttlePosition") {
+              return { ...item, value: getPIDValue() };
+            } else if (pidCode === "012F" && item.id === "fuelLevel") {
+              return { ...item, value: getPIDValue() };
+            } else if (pidCode === "010F" && item.id === "intakeTemp") {
+              return { ...item, value: getPIDValue() };
+            } else if (pidCode === "010B" && item.id === "manifoldPressure") {
+              return { ...item, value: getPIDValue() };
+            }
+            return item;
+          });
+        });
+      };
 
-      // Fetch engine load
-      try {
-        console.log("Sending engine load command...");
-        const engineLoad = await obdDataFunctions.getEngineLoad(
-          plxDevice,
-          bluetoothContext.sendCommand,
-        );
-        console.log("Engine load raw response:", engineLoad);
-        if (engineLoad !== null) {
-          console.log("Parsed engine load value:", engineLoad);
-          setLiveData((prevData) =>
-            prevData.map((item) =>
-              item.id === "engineLoad" ? { ...item, value: engineLoad } : item,
-            ),
-          );
-        }
-      } catch (e) {
-        console.log("Failed to fetch engine load:", e);
-      }
-      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
-
-      // Fetch throttle position
-      try {
-        console.log("Sending throttle position command...");
-        const throttlePos = await obdDataFunctions.getThrottlePosition(
-          plxDevice,
-          bluetoothContext.sendCommand,
-        );
-        console.log("Throttle position raw response:", throttlePos);
-        if (throttlePos !== null) {
-          console.log("Parsed throttle position value:", throttlePos);
-          setLiveData((prevData) =>
-            prevData.map((item) =>
-              item.id === "throttlePosition"
-                ? { ...item, value: throttlePos }
-                : item,
-            ),
-          );
-        }
-      } catch (e) {
-        console.log("Failed to fetch throttle position:", e);
-      }
-      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
-
-      // Fetch fuel level
-      try {
-        console.log("Sending fuel level command...");
-        const fuelLevel = await obdDataFunctions.getFuelLevel(
-          plxDevice,
-          bluetoothContext.sendCommand,
-        );
-        console.log("Fuel level raw response:", fuelLevel);
-        if (fuelLevel !== null) {
-          console.log("Parsed fuel level value:", fuelLevel);
-          setLiveData((prevData) =>
-            prevData.map((item) =>
-              item.id === "fuelLevel" ? { ...item, value: fuelLevel } : item,
-            ),
-          );
-        }
-      } catch (e) {
-        console.log("Failed to fetch fuel level:", e);
-      }
-      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
-
-      // Fetch intake air temperature
-      try {
-        console.log("Sending intake air temperature command...");
-        const intakeTemp = await obdDataFunctions.getIntakeAirTemperature(
-          plxDevice,
-          bluetoothContext.sendCommand,
-        );
-        console.log("Intake temp raw response:", intakeTemp);
-        if (intakeTemp) {
-          console.log("Parsed intake temp value:", intakeTemp.celsius);
-          setLiveData((prevData) =>
-            prevData.map((item) =>
-              item.id === "intakeTemp"
-                ? { ...item, value: intakeTemp.celsius }
-                : item,
-            ),
-          );
-        }
-      } catch (e) {
-        console.log("Failed to fetch intake temperature:", e);
-      }
-      await new Promise((resolve) => setTimeout(resolve, COMMAND_SPACING_MS));
-
-      // Fetch manifold pressure
-      try {
-        console.log("Sending manifold pressure command...");
-        const manifoldPressure = await obdDataFunctions.getManifoldPressure(
-          plxDevice,
-          bluetoothContext.sendCommand,
-        );
-        console.log("Manifold pressure raw response:", manifoldPressure);
-        if (manifoldPressure !== null) {
-          console.log("Parsed manifold pressure value:", manifoldPressure);
-          setLiveData((prevData) =>
-            prevData.map((item) =>
-              item.id === "manifoldPressure"
-                ? { ...item, value: manifoldPressure }
-                : item,
-            ),
-          );
-        }
-      } catch (e) {
-        console.log("Failed to fetch manifold pressure:", e);
-      }
+      // Batch query all PIDs at once with incremental updates
+      console.log("[LiveData] Querying PIDs:", CORE_PIDS);
+      await obdEngine.queryMultiplePIDsWithCallback(CORE_PIDS, updateForPID);
     } catch (error) {
-      console.error("Error fetching live data:", error);
-      // Don't show alert to user, just log the error
+      console.error("[LiveData] Error fetching live data:", error);
+      // Don't show alert, just log
     }
   };
 
@@ -354,134 +255,232 @@ export default function LiveDataScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      // Small delay to ensure UI updates properly
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      // Check connection status before fetching
       const { plxDevice, isConnected } = bluetoothContext;
       if (!isConnected || !plxDevice) {
-        console.log("No connection available for refresh");
+        console.log("[LiveData] No connection available for refresh");
         return;
       }
 
       await fetchLiveData();
     } catch (error) {
-      console.log("Error during refresh:", error);
+      console.log("[LiveData] Error during refresh:", error);
     } finally {
       setRefreshing(false);
     }
   };
 
-  // Start/stop auto-polling
-  const togglePolling = () => {
-    if (isPolling) {
+  // Polling state and timer
+  const pollingRef = useRef<{
+    active: boolean;
+    timeoutId: NodeJS.Timeout | null;
+  }>({
+    active: false,
+    timeoutId: null,
+  });
+
+  // Start/stop auto-polling with incremental updates
+  const togglePolling = useCallback(() => {
+    const { isConnected } = bluetoothContext;
+
+    if (pollingRef.current.active) {
       // Stop polling
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
+      pollingRef.current.active = false;
+      if (pollingRef.current.timeoutId) {
+        clearTimeout(pollingRef.current.timeoutId);
+        pollingRef.current.timeoutId = null;
       }
       setIsPolling(false);
+      console.log("[LiveData] Stopping polling");
     } else {
-      // Start polling every 5 seconds (increased due to voltage command timing)
-      const interval = setInterval(fetchLiveData, 5000);
-      pollIntervalRef.current = interval;
+      // Check device is connected before starting
+      if (!isConnected) {
+        Alert.alert(
+          "No Connection",
+          "Please connect to an OBD-II device first.",
+        );
+        return;
+      }
+
+      // Start polling
+      pollingRef.current.active = true;
       setIsPolling(true);
-      fetchLiveData(); // Initial fetch
+      console.log("[LiveData] Starting polling with incremental updates");
+
+      const poll = async () => {
+        if (!pollingRef.current.active) return;
+
+        try {
+          await fetchLiveData();
+        } catch (error) {
+          console.log("[LiveData] Polling error:", error);
+        }
+
+        // Schedule next poll only if still active (200ms interval)
+        if (pollingRef.current.active) {
+          pollingRef.current.timeoutId = setTimeout(poll, 200);
+        }
+      };
+
+      // Start first poll
+      poll();
     }
-  };
+  }, []);
 
   // Test VIN retrieval
   const testVIN = async () => {
-    const { plxDevice, isConnected, sendCommand } = bluetoothContext;
+    const { isConnected } = bluetoothContext;
 
-    if (!isConnected || !plxDevice) {
-      console.log("❌ TEST VIN: No connection to OBD-II device");
+    if (!isConnected || !obdEngine.engine) {
       Alert.alert("No Connection", "Please connect to an OBD-II device first.");
       return;
     }
 
-    console.log("🧪 TEST VIN: Starting VIN test...");
+    console.log("[LiveData] Testing VIN retrieval...");
     try {
-      const obdService = createOBDService(plxDevice, sendCommand, (msg) =>
-        console.log(`[TEST VIN] ${msg}`),
-      );
+      if (!obdEngine.isInitialized) {
+        const initialized = await obdEngine.initialize();
+        if (!initialized) {
+          Alert.alert("Error", "Failed to initialize OBD engine");
+          return;
+        }
+      }
 
-      const vin = await obdService.getVIN();
-
+      const vin = await obdEngine.getVIN();
       if (vin) {
-        console.log("✅ TEST VIN: Successfully retrieved VIN:", vin);
+        console.log("[LiveData] ✅ VIN retrieved:", vin);
         Alert.alert("VIN Retrieved", `VIN: ${vin}`);
       } else {
-        console.log("❌ TEST VIN: Failed to retrieve VIN");
+        console.log("[LiveData] ❌ Failed to retrieve VIN");
         Alert.alert("VIN Test", "Failed to retrieve VIN from vehicle");
       }
     } catch (error) {
-      console.log("❌ TEST VIN: Error:", error);
-      Alert.alert("VIN Test Error", String(error));
+      console.log("[LiveData] ❌ VIN test error:", error);
+      Alert.alert(
+        "VIN Test Error",
+        error instanceof Error ? error.message : "Unknown error",
+      );
+    }
+  };
+
+  // Test voltage retrieval
+  const testVoltage = async () => {
+    const { isConnected } = bluetoothContext;
+
+    if (!isConnected || !obdEngine.engine) {
+      Alert.alert("No Connection", "Please connect to an OBD-II device first.");
+      return;
+    }
+
+    console.log("[LiveData] Testing ATRV (voltage)...");
+    try {
+      if (!obdEngine.isInitialized) {
+        const initialized = await obdEngine.initialize();
+        if (!initialized) {
+          Alert.alert("Error", "Failed to initialize OBD engine");
+          return;
+        }
+      }
+
+      // Query voltage - this should return battery voltage
+      // Log everything to debug the raw response
+      console.log("[LiveData] Sending ATRV command...");
+      const voltageResult = await obdEngine.queryPID("ATRV");
+
+      if (voltageResult && "value" in voltageResult) {
+        console.log(
+          "[LiveData] ✅ Voltage retrieved:",
+          voltageResult.value,
+          voltageResult.unit,
+        );
+        Alert.alert(
+          "Battery Voltage",
+          `Voltage: ${voltageResult.value} ${voltageResult.unit}`,
+        );
+      } else {
+        console.log(
+          "[LiveData] ❌ Failed to parse voltage result:",
+          voltageResult,
+        );
+        Alert.alert(
+          "Voltage Test",
+          "Adapter responded but could not parse voltage. Check console logs.",
+        );
+      }
+    } catch (error) {
+      console.log("[LiveData] ❌ Voltage test error:", error);
+      Alert.alert(
+        "Voltage Test Error",
+        error instanceof Error ? error.message : "Unknown error",
+      );
     }
   };
 
   // Test DTC retrieval
   const testDTC = async () => {
-    const { plxDevice, isConnected, sendCommand } = bluetoothContext;
+    const { isConnected } = bluetoothContext;
 
-    if (!isConnected || !plxDevice) {
-      console.log("❌ TEST DTC: No connection to OBD-II device");
+    if (!isConnected || !obdEngine.engine) {
       Alert.alert("No Connection", "Please connect to an OBD-II device first.");
       return;
     }
 
-    console.log("🧪 TEST DTC: Starting DTC scan...");
+    console.log("[LiveData] Testing DTC scan...");
     try {
-      const obdService = createOBDService(plxDevice, sendCommand, (msg) =>
-        console.log(`[TEST DTC] ${msg}`),
-      );
+      if (!obdEngine.isInitialized) {
+        const initialized = await obdEngine.initialize();
+        if (!initialized) {
+          Alert.alert("Error", "Failed to initialize OBD engine");
+          return;
+        }
+      }
 
-      const dtcs = await obdService.getDTCs();
-
+      const dtcs = await obdEngine.getActiveDTCs();
       if (dtcs.length > 0) {
-        console.log(`✅ TEST DTC: Found ${dtcs.length} code(s):`, dtcs);
-        const dtcList = dtcs.map(d => `${d.code}: ${d.description}`).join('\n');
-        Alert.alert(
-          `DTCs Found (${dtcs.length})`,
-          dtcList,
-          [{ text: "OK" }],
-          { cancelable: true }
-        );
+        console.log(`[LiveData] ✅ Found ${dtcs.length} DTC(s):`, dtcs);
+        const dtcList = dtcs
+          .map((d) => `${d.code}: ${d.description}`)
+          .join("\n");
+        Alert.alert(`DTCs Found (${dtcs.length})`, dtcList, [{ text: "OK" }], {
+          cancelable: true,
+        });
       } else {
-        console.log("✅ TEST DTC: No DTCs found (vehicle is healthy)");
-        Alert.alert("No DTCs", "No diagnostic trouble codes found. Vehicle is healthy!");
+        console.log("[LiveData] ✅ No DTCs found");
+        Alert.alert(
+          "No DTCs",
+          "No diagnostic trouble codes found. Vehicle is healthy!",
+        );
       }
     } catch (error) {
-      console.log("❌ TEST DTC: Error:", error);
-      Alert.alert("DTC Test Error", String(error));
+      console.log("[LiveData] ❌ DTC test error:", error);
+      Alert.alert(
+        "DTC Test Error",
+        error instanceof Error ? error.message : "Unknown error",
+      );
     }
   };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
-    };
-  }, []);
 
   // Stop polling when screen loses focus
   useFocusEffect(
     useCallback(() => {
+      // This callback runs when screen comes into focus
+      console.log("[LiveData] Screen focused");
+
+      // Return a cleanup function that runs when screen loses focus
       return () => {
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
+        console.log("[LiveData] Screen blurred - stopping polling");
+        if (pollingRef.current.active) {
+          pollingRef.current.active = false;
+          if (pollingRef.current.timeoutId) {
+            clearTimeout(pollingRef.current.timeoutId);
+            pollingRef.current.timeoutId = null;
+          }
           setIsPolling(false);
         }
       };
     }, []),
   );
 
-  // Set up navigation header
+  // Set up navigation header with polling button
   useEffect(() => {
     navigation.setOptions({
       headerTitle: "Live Data",
@@ -510,7 +509,9 @@ export default function LiveDataScreen() {
   }, [navigation, isPolling, togglePolling]);
 
   // Sort data by priority (most important first)
-  const sortedData = liveData.sort((a, b) => a.priority - b.priority);
+  const sortedData = liveData.sort(
+    (a: LiveDataItem, b: LiveDataItem) => a.priority - b.priority,
+  );
 
   // Separate data into primary (top 4) and secondary
   const primaryData = sortedData.slice(0, 4);
@@ -565,13 +566,30 @@ export default function LiveDataScreen() {
 
           {/* Test Buttons */}
           {bluetoothContext.isConnected && (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TouchableOpacity style={[styles.testVinButton, { flex: 1 }]} onPress={testVIN}>
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
+              <TouchableOpacity
+                style={[styles.testVinButton, { flex: 1 }]}
+                onPress={testVoltage}
+              >
+                <Feather name="battery" size={16} color={colors.green[500]} />
+                <Text style={styles.testVinButtonText}>Test Voltage</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.testVinButton, { flex: 1 }]}
+                onPress={testVIN}
+              >
                 <Feather name="info" size={16} color={colors.primary[500]} />
                 <Text style={styles.testVinButtonText}>Test VIN</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.testVinButton, { flex: 1 }]} onPress={testDTC}>
-                <Feather name="alert-circle" size={16} color={colors.yellow[500]} />
+              <TouchableOpacity
+                style={[styles.testVinButton, { flex: 1 }]}
+                onPress={testDTC}
+              >
+                <Feather
+                  name="alert-circle"
+                  size={16}
+                  color={colors.yellow[500]}
+                />
                 <Text style={styles.testVinButtonText}>Test DTC</Text>
               </TouchableOpacity>
             </View>
@@ -624,8 +642,8 @@ export default function LiveDataScreen() {
           {/* Instructions */}
           <View style={styles.instructions}>
             <Text style={[styles.instructionText, isDark && styles.textMuted]}>
-              Pull down to refresh • Use Start/Stop to toggle auto-refresh every
-              5 seconds
+              Pull down to refresh • New OBD Engine with optimized batch
+              querying
             </Text>
           </View>
         </View>

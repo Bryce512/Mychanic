@@ -19,8 +19,10 @@ const SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb";
 const WRITE_UUID = "0000fff2-0000-1000-8000-00805f9b34fb";
 const READ_UUID = "0000fff1-0000-1000-8000-00805f9b34fb";
 const REMEMBERED_DEVICE_KEY = "@MychanicApp:rememberedDevice";
-const COMMAND_TIMEOUT_MS = 5000;
+const PREVIOUS_DEVICES_KEY = "@MychanicApp:previousDevices";
+const COMMAND_TIMEOUT_MS = 2000; // Timeout for BLE command responses (2s allows ISO-TP multi-frame assembly)
 const MAX_RETRIES = 2;
+const AUTO_RECONNECT_DELAY_MS = 2000; // Wait before attempting auto-reconnect
 
 // Single BLE manager instance
 const bleManager = new BlePlxManager();
@@ -33,9 +35,15 @@ export interface BluetoothDevice {
   isConnectable?: boolean;
 }
 
+export interface PreviousDevice extends BluetoothDevice {
+  lastConnected: number; // timestamp
+  connectionCount: number; // how many times connected
+}
+
 export interface BleConnectionOptions {
   onConnectionChange?: (connected: boolean, deviceId: string | null) => void;
   onLogMessage?: (message: string) => void;
+  enableAutoReconnect?: boolean; // enable background auto-reconnection
 }
 
 /**
@@ -56,16 +64,23 @@ export const useBleConnection = (options?: BleConnectionOptions) => {
   );
   const [rememberedDevice, setRememberedDevice] =
     useState<BluetoothDevice | null>(null);
+  const [previousDevices, setPreviousDevices] = useState<PreviousDevice[]>([]);
+  const [isAutoReconnecting, setIsAutoReconnecting] = useState(false);
 
   // Internal state
   const [isInitialized, setIsInitialized] = useState(false);
   const [log, setLog] = useState<string[]>([]);
   const lastCommandTime = useRef<number | null>(null);
   const connectionLock = useRef<boolean>(false);
+  const autoReconnectAttempts = useRef<Map<string, number>>(new Map()); // Track retry attempts per device
 
   // Subscriptions
   const stateSubscription = useRef<Subscription | null>(null);
   const disconnectSubscription = useRef<Subscription | null>(null);
+  const monitorSubscription = useRef<any>(null);
+
+  // Single shared response buffer for all commands
+  const responseBuffer = useRef<string>("");
 
   // Characteristic UUIDs (can be updated during discovery)
   const [writeServiceUUID, setWriteServiceUUID] =
@@ -81,6 +96,14 @@ export const useBleConnection = (options?: BleConnectionOptions) => {
       try {
         await initializeBLE();
         await loadRememberedDevice();
+        await loadPreviousDevices();
+
+        // If auto-reconnect enabled, attempt to reconnect to last used device
+        if (options?.enableAutoReconnect) {
+          await delay(AUTO_RECONNECT_DELAY_MS);
+          attemptAutoReconnect();
+        }
+
         setIsInitialized(true);
       } catch (error) {
         logMessage(
@@ -232,7 +255,7 @@ export const useBleConnection = (options?: BleConnectionOptions) => {
         bleManager.stopDeviceScan();
         setIsScanning(false);
         logMessage("🛑 Scan completed");
-      }, 4000);
+      }, 3000);
     } catch (error) {
       setIsScanning(false);
       logMessage(
@@ -279,6 +302,9 @@ export const useBleConnection = (options?: BleConnectionOptions) => {
       // Remember device
       await rememberDevice(device);
 
+      // Save to previous devices history
+      await savePreviousDevice(device);
+
       options?.onConnectionChange?.(true, device.id);
 
       logMessage(`✅ Successfully connected to ${device.name || device.id}`);
@@ -301,6 +327,13 @@ export const useBleConnection = (options?: BleConnectionOptions) => {
     }
 
     try {
+      // Clean up monitor
+      if (monitorSubscription.current) {
+        monitorSubscription.current.remove?.();
+        monitorSubscription.current = null;
+      }
+      responseBuffer.current = "";
+
       logMessage(`📵 Disconnecting from ${deviceName || deviceId}...`);
       await bleManager.cancelDeviceConnection(deviceId);
 
@@ -380,32 +413,97 @@ export const useBleConnection = (options?: BleConnectionOptions) => {
     }
   };
 
+  // Set up persistent monitor for the entire device connection
+  const setupPersistentMonitor = (device: Device) => {
+    logMessage("📡 Setting up persistent response monitor...");
+
+    try {
+      // monitorCharacteristicForService returns a subscription or null
+      const subscription = device.monitorCharacteristicForService(
+        writeServiceUUID,
+        readCharUUID,
+        (error, characteristic) => {
+          if (error) {
+            logMessage(`⚠️ Monitor received error: ${error.message}`);
+            return;
+          }
+
+          if (characteristic?.value) {
+            try {
+              const chunk = base64.decode(characteristic.value);
+              responseBuffer.current += chunk;
+            } catch (decodeError) {
+              logMessage(`⚠️ Failed to decode chunk`);
+            }
+          }
+        },
+      );
+
+      // Store subscription if it's returned (for cleanup later)
+      if (subscription) {
+        monitorSubscription.current = subscription;
+      }
+
+      logMessage("✅ Persistent monitor active for all commands");
+    } catch (error) {
+      logMessage(
+        `⚠️ Monitor setup error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      // Continue with initialization even if monitor setup has issues
+      // Some devices may not support this characteristic
+    }
+  };
+
   // Initialize OBD-II protocol
   const initializeOBD = async (device: Device): Promise<void> => {
     logMessage("🚗 Initializing OBD-II protocol...");
 
     try {
-      // Test if device is already initialized by trying a simple command
-      try {
-        const testResponse = await sendCommand(device, "ATI", 1, 2000);
-        if (testResponse && testResponse.length > 0) {
-          logMessage("✅ OBD-II device already initialized");
-          return;
-        }
-      } catch (error) {
-        logMessage("⚠️ Device not responding, will initialize...");
-      }
+      // Set up persistent monitor first, before any commands
+      setupPersistentMonitor(device);
+      await delay(100);
 
-      // Only send essential initialization commands
-      // Removed ATZ (reset) - unnecessary and causes delays
-      const commands = ["ATE0", "ATL0", "ATS0", "ATH1", "ATSP0"];
+      // Full initialization sequence - ALWAYS run this first
+      // This ensures headers are disabled from the start
+      const commands = [
+        "ATZ", // Reset adapter (critical for fresh state)
+        "ATE0", // Echo off
+        "ATL0", // Linefeeds off
+        "ATS0", // Space off
+        "ATH0", // Headers OFF - critical for proper response parsing (no CAN headers)
+        "ATD1", // Use default headers (allows adapter to handle frame assembly)
+        "ATSP0", // Auto protocol detection
+      ];
 
       for (const cmd of commands) {
-        await sendCommand(device, cmd, 1, 3000);
-        await delay(200);
+        try {
+          await sendCommand(device, cmd, 1, 3000);
+          await delay(200);
+        } catch (error) {
+          logMessage(
+            `⚠️ Command ${cmd} failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       }
 
-      logMessage("✅ OBD-II initialized");
+      // Now verify protocol was established by testing a real OBD command
+      try {
+        const verifyResponse = await sendCommand(device, "0100", 1, 2000);
+        if (
+          verifyResponse &&
+          verifyResponse.length > 0 &&
+          !verifyResponse.includes("NO DATA")
+        ) {
+          logMessage("✅ OBD-II protocol established successfully");
+        } else {
+          logMessage(
+            "⚠️ OBD protocol may not be responding correctly. Response: " +
+              verifyResponse,
+          );
+        }
+      } catch (error) {
+        logMessage("⚠️ Could not verify OBD protocol");
+      }
     } catch (error) {
       logMessage(
         `⚠️ OBD initialization warning: ${error instanceof Error ? error.message : String(error)}`,
@@ -413,7 +511,76 @@ export const useBleConnection = (options?: BleConnectionOptions) => {
     }
   };
 
-  // Send command to device
+  // Send command to device (uses shared persistent monitor)
+  const extractResponseFromBuffer = (
+    command: string,
+    timeoutMs: number,
+  ): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const startTime = Date.now();
+      let promptSeenTime: number | null = null;
+      const WAIT_AFTER_PROMPT_MS = 50; // Reduced from 200ms to minimize contamination window
+      const SEARCHING_TIMEOUT_MS = 8000;
+
+      const checkBuffer = () => {
+        const elapsed = Date.now() - startTime;
+        const buffer = responseBuffer.current.trim();
+
+        // Skip empty buffer early on
+        if (!buffer && elapsed < 100) {
+          setTimeout(checkBuffer, 50);
+          return;
+        }
+
+        // Check for search dots - extend timeout
+        if (buffer.includes(".") && !buffer.includes(">")) {
+          if (elapsed > SEARCHING_TIMEOUT_MS) {
+            responseBuffer.current = "";
+            reject(new Error(`Timeout during search: "${buffer}"`));
+            return;
+          }
+          setTimeout(checkBuffer, 100);
+          return;
+        }
+
+        // Check for NO DATA
+        if (buffer.includes("NO DATA") && !promptSeenTime) {
+          promptSeenTime = Date.now();
+          // Immediately capture and clear to prevent contamination
+          const finalBuffer = buffer;
+          responseBuffer.current = "";
+          resolve(finalBuffer);
+          return;
+        }
+
+        // Check for prompt
+        if (buffer.includes(">") && !promptSeenTime) {
+          promptSeenTime = Date.now();
+          // Wait briefly for final fragments, then capture and IMMEDIATELY clear
+          setTimeout(() => {
+            const finalBuffer = responseBuffer.current.trim();
+            responseBuffer.current = "";
+            resolve(finalBuffer);
+          }, WAIT_AFTER_PROMPT_MS);
+          return;
+        }
+
+        // Check timeout
+        if (elapsed > timeoutMs) {
+          responseBuffer.current = "";
+          reject(new Error(`Timeout after ${elapsed}ms: "${buffer}"`));
+          return;
+        }
+
+        // Keep checking
+        setTimeout(checkBuffer, 50);
+      };
+
+      checkBuffer();
+    });
+  };
+
+  // Send command to device (uses shared persistent monitor)
   const sendCommand = async (
     device: Device,
     command: string,
@@ -429,9 +596,14 @@ export const useBleConnection = (options?: BleConnectionOptions) => {
           await delay(500 * attempt);
         }
 
-        // Write command
+        // CRITICAL: Clear buffer before sending new command to prevent contamination
+        responseBuffer.current = "";
+
+        // Write command to BLE characteristic
         const commandWithCR = command + "\r";
         const base64Command = base64.encode(commandWithCR);
+
+        logMessage(`📝 [${command}] Sending command...`);
 
         await device.writeCharacteristicWithResponseForService(
           writeServiceUUID,
@@ -439,57 +611,26 @@ export const useBleConnection = (options?: BleConnectionOptions) => {
           base64Command,
         );
 
-        // Monitor for response
-        let responseData = "";
-        let timeoutHandle: NodeJS.Timeout;
+        // Wait for response using shared monitor buffer
+        logMessage(`⏳ [${command}] Waiting for response...`);
+        let response = await extractResponseFromBuffer(command, timeoutMs);
 
-        const responsePromise = new Promise<string>((resolve, reject) => {
-          timeoutHandle = setTimeout(() => {
-            reject(new Error(`Timeout waiting for response to: ${command}`));
-          }, timeoutMs);
-
-          let promptSeenTime: number | null = null;
-          const WAIT_AFTER_PROMPT_MS = 200; // Wait 200ms after seeing prompt to collect remaining data
-
-          device.monitorCharacteristicForService(
-            writeServiceUUID,
-            readCharUUID,
-            (error, characteristic) => {
-              if (error) {
-                clearTimeout(timeoutHandle);
-                reject(error);
-                return;
-              }
-
-              if (characteristic?.value) {
-                const chunk = base64.decode(characteristic.value);
-                responseData += chunk;
-
-                // When we see the prompt character '>', start a timer to wait for any remaining data
-                if (chunk.includes(">") && !promptSeenTime) {
-                  promptSeenTime = Date.now();
-
-                  // Set a short timer to collect any remaining chunks
-                  setTimeout(() => {
-                    clearTimeout(timeoutHandle);
-                    resolve(responseData);
-                  }, WAIT_AFTER_PROMPT_MS);
-                }
-              }
-            },
-          );
-        });
-
-        const response = await responsePromise;
         lastCommandTime.current = Date.now();
+
+        // Clean response
+        response = response
+          .replace(/UNABLE TO CONNECT/g, "")
+          .replace(/SEARCHING\.\.\./g, "")
+          .replace(/^\.*/, "")
+          .trim();
+
+        logMessage(`✅ [${command}] Response: "${response}"`);
         return response;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
 
         if (attempt === retries) {
-          logMessage(
-            `❌ Command failed after ${retries + 1} attempts: ${command}`,
-          );
+          logMessage(`❌ [${command}] Failed after ${retries + 1} attempts`);
         }
       }
     }
@@ -524,6 +665,100 @@ export const useBleConnection = (options?: BleConnectionOptions) => {
       logMessage(
         `❌ Failed to load remembered device: ${error instanceof Error ? error.message : String(error)}`,
       );
+    }
+  };
+
+  // Save previous device
+  const savePreviousDevice = async (device: BluetoothDevice) => {
+    try {
+      const existing = previousDevices.find((d) => d.id === device.id);
+
+      let previousDevicesToSave: PreviousDevice[];
+
+      if (existing) {
+        // Update existing device with new connection timestamp and increment count
+        previousDevicesToSave = previousDevices.map((d) =>
+          d.id === device.id
+            ? {
+                ...d,
+                lastConnected: Date.now(),
+                connectionCount: d.connectionCount + 1,
+              }
+            : d,
+        );
+      } else {
+        // Add new device to previous devices list
+        const newPreviousDevice: PreviousDevice = {
+          ...device,
+          lastConnected: Date.now(),
+          connectionCount: 1,
+        };
+        previousDevicesToSave = [newPreviousDevice, ...previousDevices].slice(
+          0,
+          10,
+        ); // Keep last 10 devices
+      }
+
+      setPreviousDevices(previousDevicesToSave);
+      await AsyncStorage.setItem(
+        PREVIOUS_DEVICES_KEY,
+        JSON.stringify(previousDevicesToSave),
+      );
+      logMessage(`💾 Device saved to history: ${device.name || device.id}`);
+    } catch (error) {
+      logMessage(
+        `❌ Failed to save device to history: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+
+  // Load previous devices
+  const loadPreviousDevices = async () => {
+    try {
+      const devicesJson = await AsyncStorage.getItem(PREVIOUS_DEVICES_KEY);
+
+      if (devicesJson) {
+        const devices: PreviousDevice[] = JSON.parse(devicesJson);
+        // Sort by most recent connection
+        devices.sort((a, b) => b.lastConnected - a.lastConnected);
+        setPreviousDevices(devices);
+        logMessage(`📋 Loaded ${devices.length} previous device(s)`);
+      }
+    } catch (error) {
+      logMessage(
+        `❌ Failed to load previous devices: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+
+  // Attempt auto-reconnect to most recent device
+  const attemptAutoReconnect = async () => {
+    if (isConnected || isAutoReconnecting || previousDevices.length === 0) {
+      return;
+    }
+
+    setIsAutoReconnecting(true);
+    try {
+      const mostRecent = previousDevices[0]; // Already sorted by most recent
+      logMessage(
+        `🔄 Attempting auto-reconnect to ${mostRecent.name || mostRecent.id}...`,
+      );
+
+      const success = await connectToDevice(mostRecent);
+
+      if (success) {
+        logMessage(
+          `✅ Auto-reconnected to ${mostRecent.name || mostRecent.id}`,
+        );
+      } else {
+        logMessage(`⚠️ Auto-reconnect failed, will retry on next scan`);
+      }
+    } catch (error) {
+      logMessage(
+        `❌ Auto-reconnect error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setIsAutoReconnecting(false);
     }
   };
 
@@ -564,6 +799,8 @@ export const useBleConnection = (options?: BleConnectionOptions) => {
     plxDevice,
     discoveredDevices,
     rememberedDevice,
+    previousDevices,
+    isAutoReconnecting,
     log,
 
     // Characteristic UUIDs
@@ -577,6 +814,8 @@ export const useBleConnection = (options?: BleConnectionOptions) => {
     disconnectDevice,
     connectToRememberedDevice,
     forgetRememberedDevice,
+    loadPreviousDevices,
+    attemptAutoReconnect,
     sendCommand,
     logMessage,
 

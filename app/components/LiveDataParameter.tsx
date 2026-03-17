@@ -24,7 +24,7 @@ export default function LiveDataParameter({
   const isDark = colorScheme === "dark";
 
   const hasValue = value !== null && value !== undefined;
-  const displayValue = hasValue ? value : "--";
+  const displayValue = hasValue ? value : "0";
 
   if (isLarge) {
     // Large card format for primary parameters
@@ -102,11 +102,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "baseline",
     marginBottom: 4,
+    width: "100%",
+    justifyContent: "center",
   },
   largeValueText: {
     fontSize: 24,
     fontWeight: "700",
     color: colors.gray[900],
+    maxFontSizeMultiplier: 1,
+    adjustsFontSizeToFit: true,
+    numberOfLines: 1,
   },
   largeUnitText: {
     fontSize: 14,

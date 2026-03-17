@@ -2,7 +2,7 @@
  * Vehicle Diagnostics Service
  * Calculation helpers and DTC code management for vehicle diagnostics
  */
-import { VehicleDiagnostics } from "../contexts/VehicleDiagnosticsContext";
+import { VehicleDiagnostics } from "../../contexts/VehicleDiagnosticsContext";
 
 export interface DTCCode {
   code: string;
@@ -7221,7 +7221,7 @@ class DTCCodeService {
         (dtc) =>
           dtc.code.toLowerCase().includes(searchTerm) ||
           dtc.description.toLowerCase().includes(searchTerm) ||
-          dtc.system.toLowerCase().includes(searchTerm)
+          dtc.system.toLowerCase().includes(searchTerm),
       )
       .slice(0, 15); // Limit to 15 results for performance
   }
@@ -7267,7 +7267,7 @@ class DTCCodeService {
    */
   findCode(code: string): DTCCode | undefined {
     return this.codes.find(
-      (dtc) => dtc.code.toUpperCase() === code.toUpperCase()
+      (dtc) => dtc.code.toUpperCase() === code.toUpperCase(),
     );
   }
 
@@ -7297,14 +7297,14 @@ export function getEngineStatus(dtcCodes: string[]): string {
 
 export function getOilLife(
   milesSinceLastChange: number,
-  milesBetweenChanges: number
+  milesBetweenChanges: number,
 ): number {
   return Math.max(
     0,
     Math.min(
       100,
-      Math.round((1 - milesSinceLastChange / milesBetweenChanges) * 100)
-    )
+      Math.round((1 - milesSinceLastChange / milesBetweenChanges) * 100),
+    ),
   );
 }
 
@@ -7316,16 +7316,16 @@ export function getBatteryStatus(batteryVoltage: number): string {
 
 export function getBrakeLife(
   milesSinceLastBrakeService: number,
-  milesBetweenBrakeService: number
+  milesBetweenBrakeService: number,
 ): number {
   return Math.max(
     0,
     Math.min(
       100,
       Math.round(
-        (1 - milesSinceLastBrakeService / milesBetweenBrakeService) * 100
-      )
-    )
+        (1 - milesSinceLastBrakeService / milesBetweenBrakeService) * 100,
+      ),
+    ),
   );
 }
 

@@ -17,7 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../components/theme-provider";
 import Card from "../components/Card";
 import VoiceInputComponent from "../components/VoiceInputComponent";
-import { diagnosticService } from "../services/diagnosticService";
+import { diagnosticService } from "../services/AI_Diagnostic";
 import {
   vehicleDataService,
   VehicleInfo,
@@ -25,7 +25,7 @@ import {
   VehicleMake,
   VehicleModel,
 } from "../services/vehicleDataService";
-import { dtcCodeService, DTCCode } from "../services/vehicleDiagnostics";
+import { dtcCodeService, DTCCode } from "../services/obd/vehicleDiagnostics";
 import { Feather } from "@expo/vector-icons";
 
 interface DiagnosticData {
@@ -147,7 +147,7 @@ export default function DiagnosticAssistant() {
     try {
       const models = await vehicleDataService.getVehicleModels(
         make.MakeName || make.Make_Name || "",
-        selectedVehicle.year
+        selectedVehicle.year,
       );
       setVehicleModels(models);
     } catch (error) {
@@ -185,7 +185,7 @@ export default function DiagnosticAssistant() {
 
   const removeDTCCode = (codeToRemove: string) => {
     setSelectedDTCCodes((prev) =>
-      prev.filter((code) => code.code !== codeToRemove)
+      prev.filter((code) => code.code !== codeToRemove),
     );
   };
 
@@ -232,7 +232,7 @@ export default function DiagnosticAssistant() {
     ) {
       Alert.alert(
         "Missing Information",
-        "Please complete the vehicle information."
+        "Please complete the vehicle information.",
       );
       return;
     }
@@ -240,7 +240,7 @@ export default function DiagnosticAssistant() {
     if (selectedDTCCodes.length === 0 && !symptomsText.trim()) {
       Alert.alert(
         "Missing Information",
-        "Please provide either DTC codes or symptoms."
+        "Please provide either DTC codes or symptoms.",
       );
       return;
     }
@@ -333,7 +333,7 @@ Would you like me to explain any of these steps in more detail, or do you have q
           vehicleDetails: `${selectedVehicle.year} ${selectedVehicle.make} ${selectedVehicle.model}`,
           dtcCodes: selectedDTCCodes.map((code) => code.code).join(", "),
         },
-        userMessage
+        userMessage,
       );
 
       setIsTyping(false);
@@ -699,7 +699,7 @@ Would you like me to explain any of these steps in more detail, or do you have q
     placeholder: string,
     value: string,
     onPress: () => void,
-    isDisabled = false
+    isDisabled = false,
   ) => (
     <View style={styles.dropdownContainer}>
       <TouchableOpacity
@@ -744,14 +744,14 @@ Would you like me to explain any of these steps in more detail, or do you have q
                 "Year",
                 "Select Year",
                 selectedVehicle.year ? selectedVehicle.year.toString() : "",
-                () => setShowYearDropdown(true)
+                () => setShowYearDropdown(true),
               )}
               {renderDropdown(
                 "Make",
                 "Select Make",
                 selectedVehicle.make,
                 () => setShowMakeDropdown(true),
-                !selectedVehicle.year
+                !selectedVehicle.year,
               )}
             </View>
 
@@ -761,7 +761,7 @@ Would you like me to explain any of these steps in more detail, or do you have q
                 "Select Model",
                 selectedVehicle.model,
                 () => setShowModelDropdown(true),
-                !selectedVehicle.make
+                !selectedVehicle.make,
               )}
             </View>
 
